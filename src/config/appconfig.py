@@ -1,0 +1,41 @@
+"""
+This module loads application settings and secrets from environment variables using the `dotenv` package.
+
+It defines the `AppSettings` class, which centralizes all configuration values required across the app.
+These include environment details (e.g., environment type, port), authentication credentials for the app
+and external services (e.g., Google OAuth, OpenAI), database connection strings, and keys for third-party
+APIs such as DigitalOcean Spaces and Google Cloud.
+
+The settings are loaded from a `.env` file into environment variables, making it easy to manage and switch
+between different environments (development, staging, production) without hardcoding sensitive information.
+
+An instance of the `AppSettings` class is created and stored as `settings`, providing a convenient and secure
+way to access configuration values throughout the application.
+"""
+
+
+# Load .env file using:
+from dotenv import load_dotenv
+load_dotenv()
+import os
+
+class AppSettings:
+    environment= os.getenv("ENVIRONMENT")
+    port = os.getenv("PORT")
+    auth_user = os.getenv("AUTH_USERNAME")
+    auth_password = os.getenv("AUTH_PASSWORD")
+    domain = os.getenv("DOMAIN")
+    db_conn_url = os.getenv("DB_CONN_URL")
+    db_name = os.getenv("DB_NAME")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    openai_api_base = os.getenv("OPENAI_API_BASE")
+    client_id = os.getenv("CLIENT_ID")
+    client_secret = os.getenv("CLIENT_SECRET")
+    redirect_uri = os.getenv("REDIRECT_URI")
+    do_spaces_secret_key = os.getenv("DO_SPACES_SECRET_KEY")
+    do_spaces_access_key = os.getenv("DO_SPACES_ACCESS_KEY")
+    client_secret_b64 = os.getenv("GOOGLE_AUTH_CLIENT_SECRET_B64")
+    service_account = os.getenv("SERVICE_ACCOUNT_B64")
+
+settings = AppSettings()
