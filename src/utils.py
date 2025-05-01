@@ -17,9 +17,8 @@ from unstructured.cleaners.core import (
     clean_non_ascii_chars,
     replace_unicode_quotes,
 )
-from langchain_community.vectorstores import FAISS
-import openai
-import streamlit as st
+from langchain_openai import OpenAI
+from src.config.appconfig import settings as app_settings
 
 
 
@@ -136,11 +135,157 @@ def format_response(response):
     return formatted_response
 
 
+def generate_explicit_query(query):
+    """Expands the user query and merges expanded queries into a single, explicit query."""
+    llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
 
-# def create_empty_vectordb():
-#     embeddings = openai(model_name="text-embedding-ada-002", api_key = openai_apikey)
-#     texts = [
-#         "No documents are available for this section. Upload documents to get accurate results.",
-#         "Placeholder content to initialize FAISS."
-#     ]
-#     return FAISS.from_texts(texts, embeddings)
+    prompt = f"""
+    Given the following vague query:
+
+    '{query}'
+
+    Expand this query into **seven structured subqueries** that break down the proposal into detailed components.
+    Ensure that the query includes **specific details** such as:
+    - The sender's company name, address, email, and phone number.
+    - The recipient’s name, position, organization, and address.
+    - A structured breakdown of the proposal, including scope of work, compliance, pricing, experience, and additional documents.
+
+    Example:
+
+    **Original Query:** "Can you write a proposal based on the requirements in the RFQ?"
+
+    **Expanded Queries:**
+    1. "Provide a formal header section with the sender's full company details (name, address, email, phone) and the recipient's details (name, position, organization, address)."
+    2. "Write a professional opening paragraph that introduces the company and states the purpose of the proposal."
+    3. "Describe the scope of work, breaking it into detailed sections for each service category (e.g., borehole rehabilitation and new drilling)."
+    4. "Provide a clear breakdown of pricing, including cost per lot and total project cost, specifying currency and payment terms."
+    5. "Outline a detailed project plan and timeline, including key milestones and deliverables."
+    6. "List all required compliance details, including adherence to RFQ terms, delivery timelines, insurance coverage, and taxation requirements."
+    7. "Outline the company's experience and qualifications, listing past projects, certifications, and key personnel expertise."
+    8. "List all necessary additional documents, such as bidder’s statement, vendor profile form, and statement of confirmation, etc."
+
+    **Final Explicit Query:**  
+    "Can you write a proposal based on the requirements in the RFQ, including:  
+    (1) A formal header with sender and recipient details,  
+    (2) An introduction stating the company’s expertise and purpose of the proposal,  
+    (3) A detailed scope of work for each service component,  
+    (4) A structured pricing breakdown with currency and payment terms,  
+    (5) A detailed project plan and timeline with milestones, and
+    (6) A section on compliance, including delivery, insurance, and taxation,  
+    (7) A section on experience and qualifications, highlighting past projects and key personnel, and  
+    (8) A section listing all required additional documents."
+
+    Now, generate an explicit query for:
+
+    '{query}'
+    """
+
+    response = llm.invoke(prompt)
+    return response.strip()
+
+
+def proposal_prompt():
+    return """
+    You are an expert proposal assistant. Generate a comprehensive proposal using ONLY information from these sources:
+    ---Knowledge Base---
+    {context_data}
+
+    ---Response Rules---
+    1. Do NOT use Markdown or special characters like `**`, `#`, or `-`. Use plain text formatting only.
+    2. Structure the proposal with clear section titles, separated by newlines.
+    3. NO placeholders like [Company Name]; use real data from the knowledge base or note it as missing if not found.
+    4. Use a professional tone.
+    5. SKIP COMPLIMENTARY CLOSINGS OR VALEDICTIONS
+    6. SKIP SALUTATION
+
+    ---Proposal Structure---
+    LETTERHEAD &  
+    - Display brand name, reg/vat numbers, and contact info  
+
+    INTRODUCTION 
+    - Greet the recipient briefly and outline purpose
+
+    PROJECT SCOPE  
+    - Detailed scope from the knowledge base  
+
+    EXCLUSIONS  
+    - List any out-of-scope items if mentioned  
+
+    DELIVERABLES  
+    - Clearly outline what will be delivered  
+
+    COMMERCIAL 
+    - Provide cost breakdown and payment terms in a tabular form  
+
+    SCHEDULE  
+    - Timeline or milestone details 
+
+    COMPLIANCE SECTION
+    - List all required compliance details, including adherence to RFQ terms, delivery timelines, insurance coverage, and taxation requirements.
+
+
+    EXPERIENCE & QUALIFICATIONS
+    - Outline the company's experience and qualifications, listing past projects, certifications, and key personnel expertise.
+
+    ADDITIONAL DOCUMENTS REQUIRED 
+    - List all necessary additional documents, such as bidder’s statement, vendor profile form, and statement of confirmation, etc.
+
+    CONCLUSION
+    - Summarize key points   
+
+    Yours Sincerely,
+    - Provide sign-off lines referencing Directors or authorized persons.
+
+    Current RFQ Requirements: {query}
+    """
+
+
+def custom_prompt():
+    return """
+    You are an **expert assistant specializing in proposal writing** for procurement bids. Your role is to **generate professional, structured, and detailed proposals**. 
+
+    **IMPORTANT RULES:**  
+    - **DO NOT HALLUCINATE**: Only use the provided RFQ details and relevant organizational data.  
+    - **IF INFORMATION IS MISSING**: Clearly state "Information not available in the RFQ document."  
+    - **ENSURE A FORMAL & PROFESSIONAL TONE.**  
+
+    **PROPOSAL STRUCTURE:**  
+
+
+        - Include **company name, address, contact details, date, and RFQ reference number**.  
+        - Include the **recipient’s name, organization, and address**.  
+
+        **Executive Summary**  
+        - Provide a brief **introduction** about the company.  
+        - Summarize the **key services offered** in response to the RFQ.  
+
+        **Scope of Work**  
+        - Outline **each deliverable** as specified in the RFQ.  
+        - Provide **technical details, compliance requirements, and execution strategy**.  
+
+        **Technical Approach & Methodology**  
+        - Describe the **step-by-step process** for project execution.  
+        - Highlight **tools, technologies, and quality assurance methods**.  
+
+        **Project Plan & Timeline**  
+        - Include a **table of milestones** with estimated completion dates.  
+        - Ensure alignment with **RFQ deadlines and compliance requirements**.  
+
+        **Pricing & Payment Terms**  
+        - Provide a structured **cost breakdown per project phase**.  
+        - Outline **payment terms, tax exemptions, and invoicing policies**.  
+
+        **Company Experience & Past Performance**  
+        - Showcase **previous projects, certifications, and industry expertise**.  
+        - List **relevant clients, testimonials, and references**.  
+
+        **Compliance & Certifications**  
+        - Confirm **adherence to procurement regulations, environmental standards, and safety policies**.  
+        - Attach **insurance documentation, licensing, and regulatory approvals**.  
+
+        **Attachments & Supporting Documents**  
+        - Ensure **all required forms, legal documents, and compliance matrices** are attached.   
+    ---  
+
+    Now, generate a **full proposal** using the structured format above, ensuring precision, professionalism, and clarity.
+    """

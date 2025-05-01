@@ -25,15 +25,15 @@ Note:
 import boto3
 from botocore.exceptions import ClientError
 from pathlib import Path
-import streamlit as st
+from src.config.appconfig import settings as app_settings
 
 SPACE_NAME = "lightrag-bucket"
 SPACE_REGION = "nyc3"  # change if yours differs
 FOLDER_NAME = "knowledge-base"
 
 DO_ENDPOINT = f"https://{SPACE_REGION}.digitaloceanspaces.com"
-ACCESS_KEY = st.secrets["DO_SPACES_ACCESS_KEY"]
-SECRET_KEY = st.secrets["DO_SPACES_SECRET_KEY"]
+ACCESS_KEY = app_settings.do_spaces_access_key
+SECRET_KEY = app_settings.do_spaces_secret_key
 
 session = boto3.session.Session()
 client = session.client('s3',

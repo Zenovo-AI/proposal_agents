@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     VERSION: str = "3.0.2"
     
     PROJECT_NAME: str = "RAG Server"
+
 def get_setting():
     """
     Return the settings object.

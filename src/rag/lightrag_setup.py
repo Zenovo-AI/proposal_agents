@@ -38,22 +38,22 @@ Note:
 """
 
 import logging
-import streamlit as st
 import asyncio
 import numpy as np
 from lightrag import LightRAG
 from lightrag.llm.openai import openai_embed, gpt_4o_complete
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_pipeline_status
+from src.config.appconfig import settings as app_settings
 
 # Embedding function using OpenAI
 def embedding_func(texts: list[str]) -> np.ndarray:
-    api_key = st.secrets["OPENAI_API_KEY"]
+    api_key = app_settings.openai_api_key
     embeddings = openai_embed(
         texts,
         model="text-embedding-3-large",
         api_key=api_key,
-        base_url = st.secrets["OPENAI_API_BASE"]
+        base_url = app_settings.openai_api_base
     )
     if embeddings is None:
         logging.error("Received empty embeddings from API.")

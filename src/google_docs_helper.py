@@ -1,3 +1,6 @@
+import json
+import logging
+import re
 from googleapiclient.discovery import Resource
 from googleapiclient.errors import HttpError
 
@@ -156,3 +159,81 @@ class GoogleDriveAPI:
         except HttpError as e:
             print(f"Folder creation failed: {e}")
             raise
+
+
+
+# Helper Function to Clean and Parse JSON
+def clean_and_parse_json(raw_json):
+    try:
+        fixed_json = raw_json.replace("{{", "{").replace("}}", "}")
+        return json.loads(fixed_json)
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON parsing error: {e}. Raw data: {raw_json}")
+        return None
+
+
+def extract_section(proposal_text, section_name):
+    """Robust section extraction with subsections handling"""
+    lines = proposal_text.split('\n')
+    content = []
+    capture = False
+    subsection_pattern = re.compile(r'^\s*(LOT \d+:|•|\d+\.)\s*', re.IGNORECASE)
+    
+    # Define section names that mark the end of the current section
+    end_sections = ['Project Scope', 'Exclusions', 'Deliverables', 'Commercial', 'Schedule', 'Compliance Section', 'Experience & Qualifications', 'Additional Documents Required', 'Conclusion', 'Yours Sincerely']
+    # Build regex pattern to match any of these sections at line start
+    end_pattern = re.compile(
+        r'^\s*({})\b.*'.format(  # \b ensures whole word match
+            '|'.join(re.escape(section) for section in end_sections)
+        ),
+        re.IGNORECASE
+    )
+
+    for line in lines:
+        # Normalize line for matching
+        clean_line = line.strip().lower().replace('_', ' ').replace('/', ' ')
+        
+        # Start capturing at target section (exact match check)
+        if section_name.lower() == clean_line and not capture:
+            capture = True
+            continue  # Skip the section header line itself
+            
+        if capture:
+            # Stop at next main section (using original line for pattern matching)
+            if end_pattern.match(line.strip()):
+                break
+                
+            # Preserve subsections and lists with proper formatting
+            if subsection_pattern.match(line):
+                content.append('\n' + line.strip())
+            elif line.strip():
+                content.append(line.strip())
+
+    return '\n'.join(content).strip()
+
+    
+
+# Parse generated content into template structure
+def parse_proposal_content(proposal_text):
+    """Extracts proposal sections with proper placeholder keys"""
+    parsed_data = {
+        "INTRODUCTION_CONTENT": extract_section(proposal_text, "Introduction"),
+        "PROJECT_SCOPE_CONTENT": extract_section(proposal_text, "Project Scope"),
+        "EXCLUSIONS_CONTENT": extract_section(proposal_text, "Exclusions"),
+        "DELIVERABLES_CONTENT": extract_section(proposal_text, "Deliverables"),
+        "COMMERCIAL_CONTENT": extract_section(proposal_text, "Commercial"),
+        "SCHEDULE_CONTENT": extract_section(proposal_text, "Schedule"),
+        "COMPLIANCE_CONTENT": extract_section(proposal_text, "Compliance Section"),
+        "EXPERIENCE_CONTENT": extract_section(proposal_text, "Experience & Qualifications"),
+        "ADDITIONAL_DOCUMENTS_CONTENT": extract_section(proposal_text, "Additional Documents Required"),
+        "CONCLUSION_CONTENT": extract_section(proposal_text, "Conclusion"),
+        "SIGN_OFF_CONTENT": extract_section(proposal_text, "Yours Sincerely,")    
+    }
+
+    # 🔍 DEBUG: Log extracted content before sending it for replacement
+    print("\n--- 🔍 DEBUG: Parsed Proposal Content ---")
+    for key, value in parsed_data.items():
+        print(f"{key}: {value[200:]}...")  # Print first 200 characters for preview
+    print("--- 🔍 End of Parsed Content ---\n")
+
+    return parsed_data

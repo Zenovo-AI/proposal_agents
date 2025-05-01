@@ -7,52 +7,40 @@ Ingests and processes document files or web links, extracting content and storin
 
 from pathlib import Path
 import sqlite3
-import streamlit as st
-from src.constant import SECTION_KEYWORDS
 from src.document_processor import DocumentProcessor
 from src.db_helper import insert_file_metadata
-from src.rag.do_spaces import upload_file
-from db_helper import insert_file_metadata
-from document_processor import DocumentProcessor
+from src.cloud_storage.do_spaces import upload_file
+from src.rag.lightrag_setup import RAGFactory
+import traceback
 
 process_document = DocumentProcessor()
 
-async def ingress_file_doc(file_name: str, file_path: str = None, web_links: list = None, section=""):
-    from src.rag.lightrag_setup import RAGFactory
-    import traceback
-    
-    # Get the section from session state
-    section = st.session_state.get("current_section", section)  # Use session state or fallback to provided section
+async def ingress_file_doc(file_name: str, file_path: str = None, web_links: list = None):
+    process_document = DocumentProcessor()
 
     try:
-        # Map section to table name
-        table_name = next((key for key, value in SECTION_KEYWORDS.items() if value == section), None)
-        if not table_name:
-            return {"error": "No table mapping found for the given section."}
-
         # Connect to the database
         conn = sqlite3.connect("files.db", check_same_thread=False)
         cursor = conn.cursor()
 
         # Check if file already exists in the database
         if file_path:
-            cursor.execute(f"SELECT file_name FROM {table_name} WHERE file_name = ?", (file_name,))
+            cursor.execute("SELECT file_name FROM documents WHERE file_name = ?", (file_name,))
             if cursor.fetchone():
-                st.sidebar.warning(f"File '{file_name}' already exists in the '{section}' section.")
+                return {"error": f"File '{file_name}' already exists."}
 
         # Check if web links already exist in the database
         if web_links:
             for link in web_links:
-                cursor.execute(f"SELECT file_name FROM {table_name} WHERE file_name = ?", (link,))
+                cursor.execute("SELECT file_name FROM documents WHERE file_name = ?", (link,))
                 if cursor.fetchone():
-                    st.sidebar.warning(f"Web link '{link}' already exists in the '{section}' section.")
+                    return {"error": f"Web link '{link}' already exists."}
 
-        # Initialize text content list
+        # Extract content
         text_content = []
 
-        # Process file content if file_path is provided
         if file_path:
-            file_path_str = str(file_path)  # Convert Path object to string
+            file_path_str = str(file_path)
             if file_path_str.endswith(".pdf"):
                 extracted_text = process_document.extract_text_and_tables_from_pdf(file_path_str)
                 if extracted_text:
@@ -62,34 +50,30 @@ async def ingress_file_doc(file_name: str, file_path: str = None, web_links: lis
             else:
                 return {"error": "Unsupported file format."}
 
-        # Process web links if provided
         if web_links:
             for link in web_links:
                 web_content = process_document.process_webpage(link)
                 if web_content:
                     text_content.append(web_content)
 
-        # Ensure there is content to process
         if not text_content:
             return {"error": "No valid content extracted from file or web links."}
 
-        # Insert metadata into the database
+        # Insert into database
         for content in text_content:
-            insert_file_metadata(file_name, table_name, content)
+            insert_file_metadata(file_name, content)
 
-        # Create unique working directory for the file
+        # RAG processing
         working_dir = Path("./analysis_workspace")
-        working_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+        working_dir.mkdir(parents=True, exist_ok=True)
 
-        # Process data using RAGFactory
         rag = RAGFactory.create_rag(str(working_dir))
         rag.insert(text_content)
 
-        for file_path in working_dir.glob("*"):  # This will iterate over all files in the directory
-            if file_path.is_file():  # Ensure we are uploading files, not directories
-                upload_file(file_path)  # Upload the file to your DigitalOcean Space
+        for file_path in working_dir.glob("*"):
+            if file_path.is_file():
+                upload_file(file_path)
 
-        # Show success message
         print(f"File '{file_name}' processed and inserted successfully!")
         return {"success": True}
 

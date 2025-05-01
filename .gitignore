@@ -164,9 +164,7 @@ cython_debug/
 # Add this line
 uploaded_files
 .streamlit
+analysis_workspace/
 
-<<<<<<< HEAD
 data/
-=======
->>>>>>> 279f671791252a8d1baaea76552610f0e766398a
 files.db

@@ -11,5 +11,5 @@ This model ensures structured validation of incoming data for querying specific 
 from pydantic import BaseModel, Field
 
 class RequestModel(BaseModel):
-    query:str
-    section: str = Field(default="rfp_documents", description="the section to query data from")
+    user_query:str
+    chat_history: str = Field(default=None, description="chat history for the user query")

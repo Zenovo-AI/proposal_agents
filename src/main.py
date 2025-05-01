@@ -12,9 +12,9 @@ Also configures middleware for CORS, security, and handles different modes (deve
 
 
 from src.datamodel import RequestModel
-from src.rag.inference import retrieve_all_files_in_section
-from src.ingress import ingress_file_doc
-import google.generativeai as genai
+from src.rag.inference import generate_answer
+from src.rag.ingress import ingress_file_doc
+from langchain_openai import OpenAI
 from src.db_helper import initialize_database
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File
@@ -44,8 +44,13 @@ async def lifespan(app: FastAPI):
     # STARTUP Call Check routine
     print(running_mode)
     print()
-    genai.configure(api_key=app_settings.google_api_key)
+    
+    # Configure OpenAI API
+    OpenAI.api_key = app_settings.openai_api_key
+    
+    # Initialize database
     initialize_database()
+    
     print(" ⚡️🚀 RAG Server::Started")
     yield
 
@@ -119,7 +124,7 @@ async def ingress_file_doc(file: UploadFile = File(...)):
 
 @app.post("/retrieve")
 def retrieve_query(requestModel:RequestModel):
-    response = retrieve_all_files_in_section(requestModel.query, requestModel.section)
+    response = generate_answer(requestModel.user_query, requestModel.chat_history)
     return JSONResponse(content={"response": response})
         
         

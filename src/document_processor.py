@@ -11,7 +11,7 @@ Functions:
 
 from langchain.docstore.document import Document
 import trafilatura
-from utils import clean_text
+from src.utils import clean_text
 import logging
 import pdfplumber
 
