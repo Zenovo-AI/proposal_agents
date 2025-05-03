@@ -31,42 +31,63 @@ application environment.
 from pathlib import Path
 import traceback
 from src.cloud_storage.do_spaces import download_all_files
-from src.rag.lightrag_setup import RAGFactory
-from src.rag.ingress import ingress_file_doc
-from lightrag import QueryParam
+from src.rag_agent.lightrag_setup import RAGFactory
+from src.rag_agent.ingress import ingress_file_doc
+from lightrag import QueryParam # type: ignore
 from src.utils import clean_text, generate_explicit_query, proposal_prompt
+from langchain_core.messages import AIMessage # type: ignore
+from src.reflexion_agent.state import State
+from langgraph.graph.message import add_messages # type: ignore
+
+def generate_draft(user_query: str, state: State) -> State:
+    expanded_queries = generate_explicit_query(user_query)
+    full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
+
+    working_dir = Path("./analysis_workspace")
+    download_all_files(working_dir)
+
+    rag = RAGFactory.create_rag(str(working_dir))
+    rag_response = rag.query(full_prompt, QueryParam(mode="hybrid"))
+    cleaned_response = clean_text(rag_response)
+
+    candidate = AIMessage(content=cleaned_response)
+    state["candidate"] = candidate
+    state["messages"] = add_messages(state.get("messages", []), [candidate])
+    state["status"] = "proposal_generated"
+
+    return state
 
 
-def generate_answer(user_query, chat_history=None):
-    """Generates an answer from the chatbot based on user input."""
+# def generate_answer(user_query, chat_history=None):
+#     """Generates an answer from the chatbot based on user input."""
 
-    if not user_query:
-        return None
+#     if not user_query:
+#         return None
 
-    try:
-        # Step 1: Expand the query
-        expanded_queries = generate_explicit_query(user_query)
-        full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
+#     try:
+#         # Step 1: Expand the query
+#         expanded_queries = generate_explicit_query(user_query)
+#         full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
 
-        # Step 2: Setup working directory and download files
-        working_dir = Path("./analysis_workspace")
-        download_all_files(working_dir)
+#         # Step 2: Setup working directory and download files
+#         working_dir = Path("./analysis_workspace")
+#         download_all_files(working_dir)
 
-        # Step 3: Query RAG
-        rag = RAGFactory.create_rag(str(working_dir))
-        response = rag.query(full_prompt, QueryParam(mode="hybrid"))
+#         # Step 3: Query RAG
+#         rag = RAGFactory.create_rag(str(working_dir))
+#         response = rag.query(full_prompt, QueryParam(mode="hybrid"))
 
-        # Step 4: Store chat history (if provided)
-        if chat_history is not None:
-            chat_history.append(("You", user_query))
-            chat_history.append(("Bot", response))
+#         # Step 4: Store chat history (if provided)
+#         if chat_history is not None:
+#             chat_history.append(("You", user_query))
+#             chat_history.append(("Bot", response))
 
-        # Step 5: Clean response and return
-        return clean_text(response)
+#         # Step 5: Clean response and return
+#         return clean_text(response)
 
-    except Exception as e:
-        traceback.print_exc()
-        return f"Error retrieving response: {e}"
+#     except Exception as e:
+#         traceback.print_exc()
+#         return f"Error retrieving response: {e}"
 
 
 

@@ -11,18 +11,24 @@ Also configures middleware for CORS, security, and handles different modes (deve
 """
 
 
+from src.reflexion_agent.critic import critic
+from src.reflexion_agent.evaluate import evaluate
+from src.reflexion_agent.retriever import retrieve_examples
+from src.reflexion_agent.state import State
 from src.datamodel import RequestModel
-from src.rag.inference import generate_answer
-from src.rag.ingress import ingress_file_doc
-from langchain_openai import OpenAI
+from src.rag_agent.inference import generate_draft
+from src.rag_agent.ingress import ingress_file_doc
+from langgraph.checkpoint.memory import MemorySaver # type: ignore
+from langgraph.graph import END, StateGraph, START # type: ignore
+from langchain_openai import OpenAI # type: ignore
 from src.db_helper import initialize_database
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File
-import os, secrets, uvicorn
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File # type: ignore
+import os, secrets, uvicorn # type: ignore
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
+from fastapi.security import HTTPBasic, HTTPBasicCredentials # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from fastapi.responses import JSONResponse # type: ignore
 from src.config.settings import Settings, get_setting
 from src.config.appconfig import settings as app_settings
 
@@ -105,6 +111,26 @@ def index(response_class=JSONResponse):
         "ApplicationStatus": "running...",
     }
 
+# Initialize the checkpointer
+checkpointer = MemorySaver()
+
+# Initialize the graph and state machine
+builder = StateGraph(State)
+builder.add_node("draft", generate_draft)
+builder.add_edge(START, "draft")
+builder.add_node("retrieve", retrieve_examples)
+builder.add_node("critic", critic)
+builder.add_node("evaluate", evaluate)
+
+builder.add_edge("draft", "retrieve")
+builder.add_edge("retrieve", "critic")
+builder.add_edge("critic", "evaluate")
+
+builder.add_conditional_edges("evaluate", lambda state: END if state.get("status") == "success" else "critic", {END: END, "critic": "critic"})
+
+# Compile the graph with the checkpointer
+graph = builder.compile(checkpointer=checkpointer)
+
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
@@ -123,9 +149,71 @@ async def ingress_file_doc(file: UploadFile = File(...)):
     return await ingress_file_doc(file.filename, file_path)
 
 @app.post("/retrieve")
-def retrieve_query(requestModel:RequestModel):
-    response = generate_answer(requestModel.user_query, requestModel.chat_history)
-    return JSONResponse(content={"response": response})
+async def retrieve_query(requestModel: RequestModel, feedback: str = None):
+    """
+    Endpoint to handle retrieving information based on a user's query and optionally accept feedback.
+    """
+    initial_state = State(input=requestModel.user_query)
+    
+    # Run the graph and get the final state after processing
+    for step in graph.stream(initial_state):
+        if step.is_interrupt:
+            if feedback:
+                step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]  # Save feedback
+                
+            # After processing feedback, continue the flow
+            final_state = graph.resume(step.state, step.next)
+            break
+    
+    # Retrieve the final response and feedback (if any)
+    response = final_state.get("candidate").content if final_state else "No valid answer generated."
+    suggestions = final_state.get("suggestions", [])
+    
+    # Returning both the response and suggestions
+    return JSONResponse(content={
+        "response": response,
+        "suggestions": suggestions
+    })
+
+
+# @app.post("/retrieve")
+# async def retrieve_query(requestModel: RequestModel):
+#     """
+#     Endpoint to handle retrieving information based on a user's query.
+#     This integrates the state machine with the RAG process.
+#     """
+#     initial_state = State(input=requestModel.user_query)
+    
+#     # Run the graph and get the final state after processing
+#     for step in graph.stream(initial_state):
+#         if step.is_interrupt:
+#             while True:
+#                 user_input = input("Do you accept this proposal? (y/n): ").lower()
+#                 if user_input == "y":
+#                     step.state["status"] = "success"  # Proceed if the user accepts
+#                     break
+#                 elif user_input == "n":
+#                     step.state["status"] = "retry"  # Mark as retry and ask for feedback
+#                     feedback = input("Please provide feedback on why you rejected the proposal: ")
+#                     step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]  # Save feedback
+#                     print(f"Feedback recorded: {feedback}. Processing your feedback...")
+#                     break
+#                 else:
+#                     print("Invalid input. Please enter 'y' for accept or 'n' for reject.")
+            
+#             # Resume the flow after feedback is collected
+#             final_state = graph.resume(step.state, step.next)
+#             break
+    
+#     # Retrieve the final response and feedback (if any)
+#     response = final_state.get("candidate").content if final_state else "No valid answer generated."
+#     suggestions = final_state.get("suggestions", [])
+    
+#     # Returning both the response and suggestions
+#     return JSONResponse(content={
+#         "response": response,
+#         "suggestions": suggestions
+#     })
         
         
 if __name__ == "__main__":

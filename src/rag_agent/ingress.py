@@ -10,7 +10,7 @@ import sqlite3
 from src.document_processor import DocumentProcessor
 from src.db_helper import insert_file_metadata
 from src.cloud_storage.do_spaces import upload_file
-from src.rag.lightrag_setup import RAGFactory
+from src.rag_agent.lightrag_setup import RAGFactory
 import traceback
 
 process_document = DocumentProcessor()
