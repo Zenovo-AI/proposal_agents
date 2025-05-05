@@ -20,6 +20,7 @@ from langchain_core.messages.ai import AIMessage # type: ignore
 
 
 class State(TypedDict):
+    user_query: str
     # NEW! Candidate for retrieval + formatted fetched examples as "memory"
     candidate: AIMessage
     examples: str

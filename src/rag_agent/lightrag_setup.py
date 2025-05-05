@@ -40,10 +40,10 @@ Note:
 import logging
 import asyncio
 import numpy as np
-from lightrag import LightRAG
-from lightrag.llm.openai import openai_embed, gpt_4o_complete
-from lightrag.utils import EmbeddingFunc
-from lightrag.kg.shared_storage import initialize_pipeline_status
+from lightrag import LightRAG # type: ignore
+from lightrag.llm.openai import openai_embed, gpt_4o_complete # type: ignore
+from lightrag.utils import EmbeddingFunc # type: ignore
+from lightrag.kg.shared_storage import initialize_pipeline_status # type: ignore
 from src.config.appconfig import settings as app_settings
 
 # Embedding function using OpenAI
@@ -68,7 +68,7 @@ class RAGFactory:
     )
 
     @classmethod
-    def create_rag(cls, working_dir: str) -> LightRAG:
+    async def create_rag(cls, working_dir: str) -> LightRAG:
         """Create a LightRAG instance with shared configuration"""
         rag = LightRAG(
             working_dir=working_dir,
@@ -80,7 +80,8 @@ class RAGFactory:
         )
 
         # Initialize storages and pipeline status (this must be async)
-        asyncio.run(cls._initialize_storage_and_pipeline(rag))
+        # asyncio.run(cls._initialize_storage_and_pipeline(rag))
+        await asyncio.create_task(cls._initialize_storage_and_pipeline(rag))
 
         return rag
 

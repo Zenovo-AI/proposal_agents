@@ -34,10 +34,16 @@ def retrieve_examples(state: State, config: RunnableConfig):
     retrieved_docs = retriever.invoke(query)[:top_k]
     examples_str = "\n---\n".join(doc.page_content for doc in retrieved_docs)
 
-    examples_str = f"""You previously wrote the following proposals:
-<RetrievedProposals>
-{examples_str}
-</RetrievedProposals>
+    print("[retrieve_examples] Retrieved Examples Preview:", examples_str[:500])
 
-Critique the current proposal by comparing it to the above."""
-    return {"examples": examples_str}
+    examples_str = f"""You previously wrote the following proposals:
+    <RetrievedProposals>
+    {examples_str}
+    </RetrievedProposals>
+
+    Critique the current proposal by comparing it to the above."""
+    
+    state["examples"] = examples_str
+    state["status"] = "examples_retrieved"
+
+    return state

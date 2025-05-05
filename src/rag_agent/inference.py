@@ -39,16 +39,26 @@ from langchain_core.messages import AIMessage # type: ignore
 from src.reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 
-def generate_draft(user_query: str, state: State) -> State:
+# def start_node(state):
+#     user_query = state.get("user_query")
+#     if not user_query:
+#         raise ValueError("Missing 'user_query' in state.")
+#     return {"user_query": user_query}
+
+
+async def generate_draft(state: dict, config: dict) -> dict:
+    user_query = state["user_query"]  # ← pulled from state
     expanded_queries = generate_explicit_query(user_query)
     full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
 
     working_dir = Path("./analysis_workspace")
     download_all_files(working_dir)
 
-    rag = RAGFactory.create_rag(str(working_dir))
-    rag_response = rag.query(full_prompt, QueryParam(mode="hybrid"))
+    rag = await RAGFactory.create_rag(str(working_dir))
+    rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
     cleaned_response = clean_text(rag_response)
+
+    print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
 
     candidate = AIMessage(content=cleaned_response)
     state["candidate"] = candidate
@@ -56,6 +66,7 @@ def generate_draft(user_query: str, state: State) -> State:
     state["status"] = "proposal_generated"
 
     return state
+
 
 
 # def generate_answer(user_query, chat_history=None):

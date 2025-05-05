@@ -1,35 +1,41 @@
-from langgraph.checkpoint.memory import MemorySaver # type: ignore
-from langgraph.graph import END, StateGraph, START # type: ignore
-from src.reflexion_agent.evaluate import evaluate
-from src.rag_agent.inference import generate_draft
-from src.reflexion_agent.critic import critic
-from src.reflexion_agent.retriever import retrieve_examples
-from src.reflexion_agent.state import State
+from langgraph.checkpoint.memory import MemorySaver  # type: ignore
+from langgraph.graph import END, StateGraph, START  # type: ignore
+from src.reflexion_agent.state import State  # Assuming State is in the correct location
 
-builder = StateGraph(State)
-builder.add_node("draft", generate_draft)
-builder.add_edge(START, "draft")
-builder.add_node("retrieve", retrieve_examples)
-builder.add_node("critic", critic)
-builder.add_node("evaluate", evaluate)
-# Add connectivity
-builder.add_edge("draft", "retrieve")
-builder.add_edge("retrieve", "critic")
-builder.add_edge("critic", "evaluate")
+def create_state_graph(State, generate_draft, retrieve_examples, critic, evaluate):
+    # Initialize the graph builder
+    builder = StateGraph(State)
 
+    # Add the start node to initialize user_query
+    # builder.add_node("start_node", start_node)
 
-def control_edge(state: State):
-    if state.get("status") == "success":
-        return END
-    return "critic"
+    # Build the state machine by adding nodes and edges
+    builder.add_node("draft", generate_draft)
+    builder.add_edge(START, "draft")
+    builder.add_node("retrieve", retrieve_examples)
+    builder.add_node("critic", critic)
+    builder.add_node("evaluate", evaluate)
 
+    # Add transitions (edges) between nodes
+    builder.add_edge("draft", "retrieve")
+    builder.add_edge("retrieve", "critic")
+    builder.add_edge("critic", "evaluate")
 
-builder.add_conditional_edges("evaluate", control_edge, {END: END, "critic": "critic"})
+    # Conditional edges from "evaluate"
+    builder.add_conditional_edges(
+        "evaluate",
+        lambda state: END if state.get("status") == "success" else "critic",
+        {END: END, "critic": "critic"}
+    )
 
+    # Initialize the checkpointer
+    checkpointer = MemorySaver()
 
-checkpointer = MemorySaver()
-graph = builder.compile(
-    checkpointer=checkpointer,
-    # New: this tells the graph to break any time it goes to the "human" node
-    interrupt_after=["evaluate"],
-)
+    # Compile the graph with interrupt functionality
+    graph = builder.compile(
+        checkpointer=checkpointer,
+        # Interrupt when the flow reaches the "evaluate" node
+        interrupt_after=["evaluate"]
+    )
+    
+    return graph

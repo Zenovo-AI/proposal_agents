@@ -28,6 +28,7 @@ def evaluate(state: State) -> State:
     retrieved_text = state["examples"]
 
     similarity = compute_similarity(candidate_text, retrieved_text)
+    print(f"[evaluate] Similarity Score: {similarity:.4f}")
     if similarity >= SIMILARITY_THRESHOLD:
         state["status"] = "success"
     else:

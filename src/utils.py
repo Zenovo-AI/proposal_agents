@@ -308,10 +308,10 @@ def prompt_template():
     Return your feedback and the revised **Generated Proposal** in the same format as the **Generated Proposal**.
 
     **Generated Proposal:**
-    {{generated_proposal}}
+    {{candidate}}
 
     **Retrieved Proposal:**
-    {{retrieved_proposal}}
+    {{examples_str}}
 
     ---
 

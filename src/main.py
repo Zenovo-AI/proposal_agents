@@ -11,6 +11,7 @@ Also configures middleware for CORS, security, and handles different modes (deve
 """
 
 
+from src.graph.node_edges import create_state_graph
 from src.reflexion_agent.critic import critic
 from src.reflexion_agent.evaluate import evaluate
 from src.reflexion_agent.retriever import retrieve_examples
@@ -18,6 +19,7 @@ from src.reflexion_agent.state import State
 from src.datamodel import RequestModel
 from src.rag_agent.inference import generate_draft
 from src.rag_agent.ingress import ingress_file_doc
+from langchain_core.runnables import RunnableConfig # type: ignore
 from langgraph.checkpoint.memory import MemorySaver # type: ignore
 from langgraph.graph import END, StateGraph, START # type: ignore
 from langchain_openai import OpenAI # type: ignore
@@ -31,6 +33,8 @@ from fastapi.middleware.cors import CORSMiddleware # type: ignore
 from fastapi.responses import JSONResponse # type: ignore
 from src.config.settings import Settings, get_setting
 from src.config.appconfig import settings as app_settings
+from functools import partial
+from langchain_openai import ChatOpenAI # type: ignore
 
 
 # Get application settings from the settings module
@@ -100,6 +104,16 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Assuming you already initialized your llm like:
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=0
+)
+
+# Wrap the critic function to always pass in the LLM
+wrapped_critic = partial(critic, llm=llm)
+
 # Define a health check endpoint
 @app.get("/", status_code=status.HTTP_200_OK)
 def index(response_class=JSONResponse):
@@ -110,27 +124,6 @@ def index(response_class=JSONResponse):
         "ApplicationEngineer": "Your name",
         "ApplicationStatus": "running...",
     }
-
-# Initialize the checkpointer
-checkpointer = MemorySaver()
-
-# Initialize the graph and state machine
-builder = StateGraph(State)
-builder.add_node("draft", generate_draft)
-builder.add_edge(START, "draft")
-builder.add_node("retrieve", retrieve_examples)
-builder.add_node("critic", critic)
-builder.add_node("evaluate", evaluate)
-
-builder.add_edge("draft", "retrieve")
-builder.add_edge("retrieve", "critic")
-builder.add_edge("critic", "evaluate")
-
-builder.add_conditional_edges("evaluate", lambda state: END if state.get("status") == "success" else "critic", {END: END, "critic": "critic"})
-
-# Compile the graph with the checkpointer
-graph = builder.compile(checkpointer=checkpointer)
-
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
@@ -148,32 +141,53 @@ async def ingress_file_doc(file: UploadFile = File(...)):
         return {"message": e.args}
     return await ingress_file_doc(file.filename, file_path)
 
+
 @app.post("/retrieve")
 async def retrieve_query(requestModel: RequestModel, feedback: str = None):
     """
     Endpoint to handle retrieving information based on a user's query and optionally accept feedback.
     """
-    initial_state = State(input=requestModel.user_query)
+    input_state = {
+        "user_query": requestModel.user_query
+    }
+    graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate)
+
+    config = RunnableConfig(
+        recursion_limit=10,
+        configurable={"thread_id": "1"},
+    )
     
-    # Run the graph and get the final state after processing
-    for step in graph.stream(initial_state):
-        if step.is_interrupt:
+    # Stream through the graph instead of running it all at once
+    final_state = None
+    async for step in graph.astream(input_state, config=config):
+        if step.get("is_interrupt", False):
             if feedback:
-                step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]  # Save feedback
-                
-            # After processing feedback, continue the flow
-            final_state = graph.resume(step.state, step.next)
+                step["state"]["suggestions"] = step["state"].get("suggestions", []) + [feedback]
+            
+            final_state = await graph.resume(step["state"], step["next"])
             break
+
+    # async for step in graph.astream(input_state, config=config):
+    #     if step.is_interrupt:
+    #         if feedback:
+    #             # Save feedback if available
+    #             step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]
+                
+    #         # After processing feedback, continue the flow
+    #         final_state = graph.resume(step.state, step.next)
+    #         break  # End the loop if we’ve processed the feedback
     
     # Retrieve the final response and feedback (if any)
     response = final_state.get("candidate").content if final_state else "No valid answer generated."
     suggestions = final_state.get("suggestions", [])
+
     
-    # Returning both the response and suggestions
+    # Return both the response and suggestions
     return JSONResponse(content={
         "response": response,
         "suggestions": suggestions
     })
+
 
 
 # @app.post("/retrieve")
