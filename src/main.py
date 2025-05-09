@@ -36,6 +36,7 @@ from src.config.appconfig import settings as app_settings
 from functools import partial
 from langchain_openai import ChatOpenAI # type: ignore
 
+MAX_ITERATIONS = 10
 
 # Get application settings from the settings module
 settings = get_setting()
@@ -156,37 +157,66 @@ async def retrieve_query(requestModel: RequestModel, feedback: str = None):
         recursion_limit=10,
         configurable={"thread_id": "1"},
     )
-    
-    # Stream through the graph instead of running it all at once
-    final_state = None
+
+    response = "No valid answer generated."
+
     async for step in graph.astream(input_state, config=config):
+        # If it's an interrupt, optionally inject feedback and resume
         if step.get("is_interrupt", False):
             if feedback:
-                step["state"]["suggestions"] = step["state"].get("suggestions", []) + [feedback]
-            
-            final_state = await graph.resume(step["state"], step["next"])
+                step["state"]["feedback"] = feedback  # Replace suggestions with feedback
+
+            # Resume and continue iteration
+            resumed = await graph.resume(step["state"], step["next"])
+            response = resumed.get("candidate", {}).get("content", response)
             break
+        else:
+            # Save response from the last step in case it's the final one
+            state_candidate = step.get("state", {}).get("candidate", {})
+            if isinstance(state_candidate, dict):
+                response = state_candidate.get("content", response)
 
-    # async for step in graph.astream(input_state, config=config):
-    #     if step.is_interrupt:
-    #         if feedback:
-    #             # Save feedback if available
-    #             step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]
-                
-    #         # After processing feedback, continue the flow
-    #         final_state = graph.resume(step.state, step.next)
-    #         break  # End the loop if we’ve processed the feedback
-    
-    # Retrieve the final response and feedback (if any)
-    response = final_state.get("candidate").content if final_state else "No valid answer generated."
-    suggestions = final_state.get("suggestions", [])
-
-    
-    # Return both the response and suggestions
     return JSONResponse(content={
-        "response": response,
-        "suggestions": suggestions
+        "response": response
     })
+
+
+# async def retrieve_query(requestModel: RequestModel, feedback: str = None):
+#     """
+#     Endpoint to stream responses for a user query using a LangChain-style graph,
+#     logging retrieved examples and assistant replies directly.
+#     """
+#     input_state = {
+#         "user_query": requestModel.user_query
+#     }
+
+#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate)
+
+#     config = RunnableConfig(
+#         recursion_limit=MAX_ITERATIONS,
+#         configurable={"thread_id": "1"},
+#     )
+
+#     response_text = None
+
+#     async for event in graph.astream(input_state, config=config):
+#         for value in event.values():
+#             messages = value.get("messages")
+#             if messages:
+#                 if isinstance(messages, list):
+#                     messages = messages[-1]
+#                 response_text = messages.content
+#                 print("Assistant:", response_text.replace("\n", "\\n")[:50])
+#             elif value.get("examples"):
+#                 print("Retrieved examples:\n\n", value["examples"][:100] + "...")
+#             elif value.get("candidate"):
+#                 print("Candidate Output:\n", str(value["candidate"].content)[:200])
+#                 response_text = value["candidate"].content
+
+#     return JSONResponse(content={
+#         "response": response_text or "No valid answer generated."
+#     })
+
 
 
 

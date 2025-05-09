@@ -2,6 +2,11 @@ from langgraph.checkpoint.memory import MemorySaver  # type: ignore
 from langgraph.graph import END, StateGraph, START  # type: ignore
 from src.reflexion_agent.state import State  # Assuming State is in the correct location
 
+def control_edge(state: State):
+    if state.get("status") == "success":
+        return END
+    return "draft"
+
 def create_state_graph(State, generate_draft, retrieve_examples, critic, evaluate):
     # Initialize the graph builder
     builder = StateGraph(State)
@@ -22,11 +27,7 @@ def create_state_graph(State, generate_draft, retrieve_examples, critic, evaluat
     builder.add_edge("critic", "evaluate")
 
     # Conditional edges from "evaluate"
-    builder.add_conditional_edges(
-        "evaluate",
-        lambda state: END if state.get("status") == "success" else "critic",
-        {END: END, "critic": "critic"}
-    )
+    builder.add_conditional_edges("evaluate", control_edge, {END: END, "draft": "draft"})
 
     # Initialize the checkpointer
     checkpointer = MemorySaver()

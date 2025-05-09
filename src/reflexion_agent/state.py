@@ -28,3 +28,4 @@ class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     runtime_limit: int
     status: str
+    iteration: str

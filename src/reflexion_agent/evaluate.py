@@ -22,17 +22,40 @@ SIMILARITY_THRESHOLD = 0.95  # How similar the proposals should be
 def compute_similarity(text1: str, text2: str) -> float:
     return difflib.SequenceMatcher(None, text1.strip(), text2.strip()).ratio()
 
+def evaluate(state: dict) -> dict:
+    # Initialize iteration count if not already present
+    if "iteration" not in state:
+        state["iteration"] = 0
 
-def evaluate(state: State) -> State:
+    # Increment iteration count
+    state["iteration"] += 1
+
     candidate_text = state["candidate"].content
     retrieved_text = state["examples"]
 
     similarity = compute_similarity(candidate_text, retrieved_text)
-    print(f"[evaluate] Similarity Score: {similarity:.4f}")
+    print(f"[evaluate] Iteration {state['iteration']}: Similarity Score = {similarity:.4f}")
+
     if similarity >= SIMILARITY_THRESHOLD:
         state["status"] = "success"
+    elif state["iteration"] >= MAX_ITERATIONS:
+        state["status"] = "failed"
+        print("[evaluate] Maximum iterations reached. Marking as failed.")
     else:
         state["status"] = "retry"
 
     return state
+
+# def evaluate(state: State) -> State:
+#     candidate_text = state["candidate"].content
+#     retrieved_text = state["examples"]
+
+#     similarity = compute_similarity(candidate_text, retrieved_text)
+#     print(f"[evaluate] Similarity Score: {similarity:.4f}")
+#     if similarity >= SIMILARITY_THRESHOLD:
+#         state["status"] = "success"
+#     else:
+#         state["status"] = "retry"
+
+#     return state
 

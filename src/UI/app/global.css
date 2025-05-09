@@ -1,0 +1,230 @@
+/* 
+ * Global Styles for CDGA Proposal Agent Frontend
+ * ----------------------------------------------
+ * This stylesheet defines the appearance and layout for the main UI, including
+ * buttons, text bubbles, input forms, loading indicators, and mode selection.
+ *
+ * GLOBAL RESETS
+ * -------------
+ * *         - Sets a clean font (Verdana, Tahoma).
+ * body      - Centers everything in the viewport and applies a background image.
+
+ * MAIN CONTAINER
+ * --------------
+ * main      - The white card UI container with padding, rounded corners, vertical layout, 
+ *             and a subtle top-down gradient.
+
+ * SECTION STYLING
+ * ---------------
+ * section              - Full width.
+ * section.populated    - Scrollable area where chat bubbles appear, aligned at bottom.
+
+ * TEXT STYLING
+ * ------------
+ * .starter-text        - Adds horizontal padding to the intro message (used in chat mode).
+ * .mode-selector p     - Formats the welcome text: left-aligned, wide, and spaced from buttons.
+
+ * MODE SELECTOR
+ * -------------
+ * .mode-selector        - Arranges intro text and action buttons vertically and centered.
+ * .mode-selector button - Red F1-themed buttons with hover effect for interaction.
+
+ * INPUT AREA
+ * ----------
+ * form              - Horizontal layout for the chat input and submit button.
+ * input.question-box - Styles the user text input field.
+ * input[type=submit] - Styles the submit button (purple background, white text).
+
+ * CHAT BUBBLES
+ * ------------
+ * .bubble           - Base style for message bubbles: spacing, shadow, and alignment.
+ * .bubble.user      - Light blue bubble aligned right for user input.
+ * .bubble.assistant - Light grey/blue bubble aligned left for AI responses.
+
+ * PROMPT SUGGESTIONS
+ * ------------------
+ * .prompt-suggestion-row    - Container for example prompts.
+ * .prompt-suggestion-button - Bubble-style button for suggested prompts.
+
+ * LOADING ANIMATION
+ * -----------------
+ * .loader           - Animated 3-dot loader using CSS keyframes.
+ * @keyframes loading - Cycles visibility of each dot to simulate typing.
+ */
+
+
+* {
+    font-family: Verdana, Tahoma, sans-serif;
+}
+
+body {
+    margin:0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-image: url("assets/background.jpg");
+}
+
+main {
+    width: 85vw;
+    height: 85vh;
+    background: linear-gradient(to bottom, #f8f8f8, #cfcfcf);
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    text-align: center;
+    color: #383838;
+    overflow: hidden;
+}
+
+section {
+    width: 100%;
+}
+
+section.populated {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    justify-content: flex-end;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.starter-text {
+    padding: 0 80px;
+}
+
+form {
+    height: 50px;
+    width: 100%;
+    display: flex;
+    border-top: #828282 solid 2px;
+    padding-top: 20px;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+}
+
+.mode-selector p {
+    margin-bottom: 2rem; /* or adjust as needed */
+    text-align: left;
+    max-width: 90%; /* optional for better readability */
+    width: 100%;
+    font-size: 1.05rem;
+  }
+
+.mode-selector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    margin-top: 0;
+    padding-top: 1rem;
+  }
+  
+
+.mode-selector button {
+    padding: 10px 20px;
+    font-size: 1rem;
+    border-radius: 6px;
+    border: none;
+    background-color: #e10600; /* F1 red */
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .mode-selector button:hover {
+    background-color: #b70000;
+  }
+  
+
+input.question-box {
+    width: 85%;
+    padding: 10px;
+    font-size: 15px;
+    color: #383838;
+    border: none;
+    flex-grow: 1;
+}
+
+input[type=submit] {
+    width: 15%;
+    padding: 10px;
+    font-size: 15px;
+    border: none;
+    color: #fff;
+    background-color: #411b8d;
+    flex-shrink: 0;
+}
+
+input:focus {
+    outline: none;
+}
+
+.bubble {
+    margin: 8px;
+    padding: 8px;
+    font-size: 15px;
+    border: none;
+    color: #383838;
+    box-shadow: #959da533 0 8px 24px;
+    width: 80%;
+    text-align: left;
+}
+
+.bubble.user {
+    border-radius: 20px 20px 0 20px;
+    background-color: #E1F4FFFF;
+    margin-left: auto;
+}
+
+.bubble.assistant {
+    border-radius: 20px 20px 20px 0;
+    background-color: #dce7ff;
+}
+
+.prompt-suggestion-row {
+    width: 100%;
+}
+
+.prompt-suggestion-button {
+    margin: 8px;
+    padding: 8px;
+    font-size: 15px;
+    border: none;
+    background-color: #fff;
+    border-radius: 10px;
+    color: #383838;
+    box-shadow: #959da533 0 8px 24px;
+}
+  
+.assistant {
+    background-color: #f0f0f0;
+    align-self: flex-start;
+  }
+  
+
+.loader {
+    margin: 10px;
+    width: 60px;
+    aspect-ratio: 4;
+    background:
+        no-repeat radial-gradient(circle closest-side, #383838 90%, #0000) 0 50%,
+        no-repeat radial-gradient(circle closest-side, #383838 90%, #0000) 50 50%,
+        no-repeat radial-gradient(circle closest-side, #383838 90%, #0000) 100 50%;
+        ;
+    background-size: calc(100%/3) 100%;
+    animation: loading 1s infinite linear
+}
+
+@keyframes loading {
+    33% { background-size: calc(100%/3) 0, calc(100%/3) 100%, calc(100%/3) 100%; }
+    50% { background-size: calc(100%/3) 100%, calc(100%/3) 0, calc(100%/3) 100%; }
+    66% { background-size: calc(100%/3) 100%, calc(100%/3) 100%, calc(100%/3) 0; }
+}
