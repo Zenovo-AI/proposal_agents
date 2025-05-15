@@ -41,8 +41,7 @@
 
 // "use client"
 
-// import { useState } from "react"
-// import { useEffect } from "react"
+// import { useState, useEffect } from "react"
 // import { Message } from "ai"
 // import Bubble from "./components/Bubble"
 // import LoadingBubble from "./components/LoadingBubble"
@@ -50,21 +49,41 @@
 // import Image from "next/image"
 // import Artboard_3 from "./assets/Artboard_3.png"
 // import { useCustomChat } from "./components/Hooks"
+// import ReactMarkdown from "react-markdown"
+// import TypeaheadPrompts from "./components/TypeAheadSuggestions"
+// import { COMMON_PROMPTS } from "./components/commonprompts"
+
+// // Enhanced feedback options
+// const FEEDBACK_OPTIONS = [
+//   "Too vague",
+//   "Too generic",
+//   "Not aligned with scope",
+//   "Needs more technical detail",
+//   "Not suitable for client",
+// ]
 
 // const Home = () => {
 //   const [mode, setMode] = useState<"upload" | "chat" | null>(null)
 //   const [file, setFile] = useState<File | null>(null)
 //   const [uploadStatus, setUploadStatus] = useState("")
+//   const [showCustomFeedbackInput, setShowCustomFeedbackInput] = useState(false)
+//   const [isFocused, setIsFocused] = useState(false)
 
 //   const {
 //     append,
 //     isLoading,
 //     messages,
 //     input,
+//     // Removed setInput as it does not exist in useCustomChat
 //     handleInputChange,
 //     handleSubmit,
 //     interrupted,
-//   } = useCustomChat("http://127.0.0.1:8000/retrieve") // explicitly set your retrieve endpoint
+//     feedbackOptions,
+//     error,
+//     setError,
+//   } = useCustomChat("http://127.0.0.1:8000/retrieve")
+
+//   // Removed redundant declaration of input and setInput
 
 //   const noMessages = !messages || messages.length === 0
 
@@ -113,19 +132,29 @@
 //       container.scrollTop = container.scrollHeight
 //     }
 //   }
-  
+
 //   useEffect(() => {
 //     if (!noMessages) scrollToBottom()
-//   }, [messages])  
+//   }, [messages])
+
+//   const handleFeedbackClick = (feedback: string) => {
+//     const msg: Message = {
+//       id: crypto.randomUUID(),
+//       content: feedback,
+//       role: "user",
+//     }
+//     append(msg)
+//     setShowCustomFeedbackInput(false)
+//   }
 
 //   return (
 //     <main>
 //       <Image src={Artboard_3} width="250" alt="CDGA Logo" />
 
-//       {/* Step 1: Choose Mode */}
 //       {!mode && (
 //         <div className="mode-selector">
-//           <p>Welcome to CDGA’s Proposal Agent.
+//           <p>
+//             Welcome to CDGA’s Proposal Agent.
 //             I’m your virtual assistant, here to help you craft top-tier proposals rooted in CDGA’s 25+ years of international engineering and consultancy 
 //             experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I’ve got you covered.
 //             Would you like to upload a document or start drafting a proposal?
@@ -135,20 +164,16 @@
 //         </div>
 //       )}
 
-//       {/* Step 2a: Upload Mode */}
 //       {mode === "upload" && (
 //         <div className="upload-section">
 //           <p>Select a file to upload:</p>
 //           <input type="file" onChange={handleFileChange} />
-//           <button onClick={handleFileUpload} disabled={!file}>
-//             Upload
-//           </button>
+//           <button onClick={handleFileUpload} disabled={!file}>Upload</button>
 //           <p>{uploadStatus}</p>
 //           <button onClick={() => setMode(null)}>⬅ Back</button>
 //         </div>
 //       )}
 
-//       {/* Step 2b: Chat Mode */}
 //       {mode === "chat" && (
 //         <>
 //           <section className={noMessages ? "" : "populated"}>
@@ -160,29 +185,105 @@
 //                   Whether you're starting from scratch or need support developing sections for organizations like CTBTO or global energy partners,  
 //                   simply tell me what you need, and I’ll generate a clear and compelling proposal for your project.
 //                 </p>
-//                 <br />
 //                 <PromptSuggestionsRow onPromptClick={handlePrompt} />
 //               </>
 //             ) : (
 //               <>
-//                 {messages.map((message: unknown, index: any) => (
-//                   <Bubble key={`message-${index}`} message={message as Message} />
+//                 {messages.map((message, index) => (
+//                   <div key={`message-${index}`} className="chat-bubble">
+//                     {message.role === "assistant" ? (
+//                       <div className="prose">
+//                         <ReactMarkdown>{message.content}</ReactMarkdown>
+//                       </div>
+//                     ) : (
+//                       <p><strong>You:</strong> {message.content}</p>
+//                     )}
+//                   </div>
 //                 ))}
 //                 {isLoading && <LoadingBubble />}
 //               </>
 //             )}
 //           </section>
 
-//           {/* Form outside the scrollable area */}
-//           <form onSubmit={handleSubmit}>
-//             <input
-//               className="question-box"
-//               onChange={handleInputChange}
-//               value={input}
-//               placeholder={interrupted ? "Provide your feedback to continue..." : "Ask me something..."}
-//             />
-//             <input type="submit" />
-//           </form>
+//           {error && (
+//             <div className="error-message" role="alert">
+//               <p>{error}</p>
+//               <button onClick={() => setError(null)} className="error-dismiss" aria-label="Dismiss error">
+//                 ✕
+//               </button>
+//             </div>
+//           )}
+
+//           {interrupted && (
+//             <div className="feedback-prompt">
+//               <p>This draft might need improvements. How would you rate it?</p>
+//               <div className="feedback-options">
+//                 {FEEDBACK_OPTIONS.map((option, idx) => (
+//                   <button
+//                     key={idx}
+//                     className="feedback-button"
+//                     onClick={() => handleFeedbackClick(option)}
+//                     disabled={isLoading}
+//                   >
+//                     {option}
+//                   </button>
+//                 ))}
+//               </div>
+
+//               <button
+//                 className="custom-feedback-toggle"
+//                 onClick={() => setShowCustomFeedbackInput((prev) => !prev)}
+//               >
+//                 {showCustomFeedbackInput ? "Hide custom feedback" : "💬 Enter Custom Feedback"}
+//               </button>
+
+//               {showCustomFeedbackInput && (
+//                 <form onSubmit={handleSubmit}>
+//                   <input
+//                     className="question-box"
+//                     onChange={handleInputChange}
+//                     value={input}
+//                     placeholder="Enter your feedback..."
+//                     disabled={isLoading}
+//                   />
+//                   <button type="submit" disabled={isLoading}>Send Feedback</button>
+//                 </form>
+//               )}
+//             </div>
+//           )}
+
+//           <div className="form-container">
+//             <form onSubmit={handleSubmit}>
+//               <div className="input-wrapper relative">
+//                 <input
+//                   className="question-box"
+//                   onChange={handleInputChange}
+//                   value={input}
+//                   placeholder={interrupted ? "Provide your feedback..." : "Ask me something..."}
+//                 />
+//                 <TypeaheadPrompts
+//                   input={input}
+//                   suggestions={COMMON_PROMPTS}
+//                   onSelect={(suggestion) => {
+//                     // Update the input field with the selected suggestion
+//                     handleInputChange({ target: { value: suggestion } } as React.ChangeEvent<HTMLInputElement>);
+
+//                     // Immediately submit the form after updating the input
+//                     handleSubmit(new Event('submit') as any);
+//                   }}
+//                 />
+                
+//               </div>
+//               <button 
+//                 type="submit"
+//                 disabled={isLoading || !input.trim()}
+//               >
+//                 {interrupted ? "Send Feedback" : "Send"}
+//               </button>
+//             </form>
+//           </div>
+
+
 //           <button onClick={() => setMode(null)}>⬅ Back</button>
 //         </>
 //       )}
@@ -193,38 +294,22 @@
 // export default Home
 
 
+
 "use client"
 
 import { useState, useEffect } from "react"
 import { Message } from "ai"
-import Bubble from "./components/Bubble"
 import LoadingBubble from "./components/LoadingBubble"
 import PromptSuggestionsRow from "./components/PromptSuggestionsRow"
 import Image from "next/image"
 import Artboard_3 from "./assets/Artboard_3.png"
 import { useCustomChat } from "./components/Hooks"
 import ReactMarkdown from "react-markdown"
+import TypeaheadPrompts from "./components/TypeAheadSuggestions"
+import { COMMON_PROMPTS } from "./typing_assistants/commonprompts"
+import { FEEDBACK_OPTIONS } from "./typing_assistants/feedbackoptions"
 
 
-const COMMON_PROMPTS = [
-  "Draft a proposal for power system upgrades",
-  "Create a technical proposal for CTBTO",
-  "Write a bid for international consulting work",
-  "Generate a proposal for remote site operations",
-]
-
-const FEEDBACK_OPTIONS = [
-  {
-    type: 'approve' as const,
-    label: 'Approve Proposal',
-    description: 'Accept the proposal as is'
-  },
-  {
-    type: 'revise' as const,
-    label: 'Request Revisions',
-    description: 'Suggest specific improvements or changes'
-  }
-]
 
 const Home = () => {
   const [mode, setMode] = useState<"upload" | "chat" | null>(null)
@@ -236,6 +321,7 @@ const Home = () => {
     isLoading,
     messages,
     input,
+    setInput,
     handleInputChange,
     handleSubmit,
     interrupted,
@@ -372,38 +458,61 @@ const Home = () => {
             </div>
           )}
 
-          {interrupted && feedbackOptions.length > 0 && (
+          {interrupted ? (
             <div className="feedback-prompt">
               <p>Please provide feedback:</p>
-              <ul>
-                {feedbackOptions.map((option, index) => (
-                  <li key={index}>{option}</li>
-                ))}
-              </ul>
               <form onSubmit={handleSubmit}>
                 <input
                   className="question-box"
                   onChange={handleInputChange}
                   value={input}
-                  placeholder="Enter your feedback..."
+                  placeholder="Type your feedback or select a suggestion..."
                   disabled={isLoading}
                 />
                 <button type="submit" disabled={isLoading}>
                   Send Feedback
                 </button>
+
+                <TypeaheadPrompts
+                  input={input}
+                  suggestions={FEEDBACK_OPTIONS}
+                  onSelect={(selected) => {
+                    const msg: Message = {
+                      id: crypto.randomUUID(),
+                      content: selected,
+                      role: "user",
+                    }
+                    append(msg)
+                    setInput("") // Important!
+                  }}
+                />
               </form>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <input
+                className="question-box"
+                onChange={handleInputChange}
+                value={input}
+                placeholder="Ask me something..."
+              />
+              <input type="submit" value="Send" />
+              <TypeaheadPrompts
+                input={input}
+                suggestions={COMMON_PROMPTS}
+                onSelect={(selected) => {
+                  const msg: Message = {
+                    id: crypto.randomUUID(),
+                    content: selected,
+                    role: "user",
+                  }
+                  append(msg)
+                  setInput("")
+                }}
+              />
+            </form>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <input
-              className="question-box"
-              onChange={handleInputChange}
-              value={input}
-              placeholder={interrupted ? "Provide your feedback to continue..." : "Ask me something..."}
-            />
-            <input type="submit" value={interrupted ? "Send Feedback" : "Send"} />
-          </form>
           <button onClick={() => setMode(null)}>⬅ Back</button>
         </>
       )}

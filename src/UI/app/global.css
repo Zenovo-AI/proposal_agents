@@ -92,6 +92,8 @@ section.populated {
     padding: 1rem;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 1;
 }
 
 
@@ -107,9 +109,10 @@ form {
     border-top: #828282 solid 2px;
     padding-top: 20px;
     border-radius: 0 0 10px 10px;
-    overflow: hidden;
     margin-top: 20px;
     align-items: center;
+    position: relative;
+    overflow: visible;
 }
 
 .mode-selector p {
@@ -257,7 +260,7 @@ input:focus {
     align-items: center;
   }
   
-  .error-dismiss {
+.error-dismiss {
     background: none;
     border: none;
     color: #dc2626;
@@ -267,70 +270,58 @@ input:focus {
     font-size: 1rem;
   }
   
-  .error-dismiss:hover {
+.error-dismiss:hover {
     opacity: 0.8;
   }
 
 
-  .typeahead-suggestions {
+  .suggestions {
     position: absolute;
     bottom: 100%;
     left: 0;
     right: 0;
     background: white;
     border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    margin-bottom: 4px;
+    z-index: 100;
     max-height: 200px;
     overflow-y: auto;
   }
   
-  .suggestion-item {
+.suggestionItem {
     width: 100%;
-    padding: 0.5rem 1rem;
     text-align: left;
-    border: none;
+    padding: 12px 16px;
     background: none;
-    cursor: pointer;
-  }
-  
-  .suggestion-item:hover {
-    background: #f7fafc;
-  }
-  
-  .feedback-options {
-    margin: 1rem 0;
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  
-  .feedback-option {
-    flex: 1;
-    min-width: 200px;
-  }
-  
-  .feedback-button {
-    width: 100%;
-    padding: 0.75rem;
-    border-radius: 0.5rem;
     border: none;
     cursor: pointer;
-    font-weight: 500;
+    transition: background-color 0.2s;
   }
   
-  .feedback-button.approve {
-    background: #48bb78;
-    color: white;
+.suggestionItem:hover {
+    background-color: #f7fafc;
+  }
+
+.form-container {
+    width: 100%;
+    margin: 1rem 0;
   }
   
-  .feedback-button.revise {
-    background: #ed8936;
-    color: white;
+.input-wrapper {
+    position: relative;
+    flex-grow: 1;
   }
   
-  .feedback-description {
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-    color: #4a5568;
+.question-box {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  
+.relative {
+    position: relative;
   }
