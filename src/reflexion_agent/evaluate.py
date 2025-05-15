@@ -15,7 +15,6 @@ This logic is useful in feedback loops where an AI agent refines its output by c
 import difflib
 from src.reflexion_agent.state import State
 
-MAX_ITERATIONS = 3
 SIMILARITY_THRESHOLD = 0.95  # How similar the proposals should be
 
 
@@ -30,32 +29,11 @@ def evaluate(state: dict) -> dict:
     # Increment iteration count
     state["iteration"] += 1
 
-    candidate_text = state["candidate"].content
+    candidate_text = state["candidate"]
     retrieved_text = state["examples"]
 
     similarity = compute_similarity(candidate_text, retrieved_text)
-    print(f"[evaluate] Iteration {state['iteration']}: Similarity Score = {similarity:.4f}")
-
-    if similarity >= SIMILARITY_THRESHOLD:
-        state["status"] = "success"
-    elif state["iteration"] >= MAX_ITERATIONS:
-        state["status"] = "failed"
-        print("[evaluate] Maximum iterations reached. Marking as failed.")
-    else:
-        state["status"] = "retry"
+    print(f"[evaluate]: Similarity Score = {similarity:.4f}")
 
     return state
-
-# def evaluate(state: State) -> State:
-#     candidate_text = state["candidate"].content
-#     retrieved_text = state["examples"]
-
-#     similarity = compute_similarity(candidate_text, retrieved_text)
-#     print(f"[evaluate] Similarity Score: {similarity:.4f}")
-#     if similarity >= SIMILARITY_THRESHOLD:
-#         state["status"] = "success"
-#     else:
-#         state["status"] = "retry"
-
-#     return state
 

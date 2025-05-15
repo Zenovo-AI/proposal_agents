@@ -69,18 +69,16 @@ from langgraph.graph.message import add_messages # type: ignore
 
 async def generate_draft(state: dict, config: dict) -> dict:
     user_query = state["user_query"]
-    suggestions_list = state.get("suggestions", [])
-    latest_suggestion = suggestions_list[-1] if suggestions_list else None
-
+    feedback = state["human_feedback"] if "human_feedback" in state else ["No Feedback yet"]
     # Generate a more detailed query from the user input
     expanded_queries = generate_explicit_query(user_query)
 
     # Compose the prompt based on whether suggestions exist
-    if latest_suggestion:
+    if feedback:
         full_prompt = (
             f"{proposal_prompt()}\n\n"
             f"User Query: {expanded_queries}\n\n"
-            f"Previous Feedback to Improve: {latest_suggestion}\n\n"
+            f"Previous Feedback to Improve: {feedback}\n\n"
             f"Please incorporate this feedback into the proposal."
         )
     else:
@@ -96,10 +94,10 @@ async def generate_draft(state: dict, config: dict) -> dict:
     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
 
     # Store results in state
-    candidate = AIMessage(content=cleaned_response)
-    state["candidate"] = candidate
-    state["messages"] = add_messages(state.get("messages", []), [candidate])
-    state["status"] = "proposal_generated"
+    candidate_text = cleaned_response
+    state["candidate"] = candidate_text
+    state["messages"] = add_messages(state.get("messages", []), [AIMessage(content=candidate_text)])
+
 
     return state
 

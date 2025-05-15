@@ -27,7 +27,7 @@ def critic(state: State, llm: ChatOpenAI) -> State:
         return state
 
     prompt = ChatPromptTemplate.from_template(prompt_template())
-    candidate_text = state["candidate"].content
+    candidate_text = state["candidate"]
     retrieved_text = state["examples"]
 
     filled_prompt = prompt.invoke({
@@ -38,7 +38,7 @@ def critic(state: State, llm: ChatOpenAI) -> State:
     response = llm.invoke(filled_prompt)
     new_candidate = response.content or candidate_text
 
-    print("[critic] Critique Result Preview:", new_candidate)
+    print("[critic] Critique Result Preview:", new_candidate[:500])
 
     state["candidate"] = AIMessage(content=new_candidate)
     state["messages"] = state.get("messages", []) + [AIMessage(content=new_candidate)]

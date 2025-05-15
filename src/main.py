@@ -11,30 +11,32 @@ Also configures middleware for CORS, security, and handles different modes (deve
 """
 
 
-from src.graph.node_edges import create_state_graph
+import logging
+from src.reflexion_agent.end_process import end_node
+from src.reflexion_agent.human_feedback import human_node
+from src.graph.node_edges import control_edge, create_state_graph
 from src.reflexion_agent.critic import critic
 from src.reflexion_agent.evaluate import evaluate
 from src.reflexion_agent.retriever import retrieve_examples
-from src.reflexion_agent.state import State
+from src.reflexion_agent.state import State, Status
 from src.datamodel import RequestModel
 from src.rag_agent.inference import generate_draft
 from src.rag_agent.ingress import ingress_file_doc
-from langchain_core.runnables import RunnableConfig # type: ignore
-from langgraph.checkpoint.memory import MemorySaver # type: ignore
-from langgraph.graph import END, StateGraph, START # type: ignore
-from langchain_openai import OpenAI # type: ignore
+from langchain_core.runnables import RunnableConfig 
+from langgraph.types import Command
+from langchain_openai import OpenAI 
 from src.db_helper import initialize_database
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File # type: ignore
-import os, secrets, uvicorn # type: ignore
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
-from fastapi.security import HTTPBasic, HTTPBasicCredentials # type: ignore
-from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from fastapi.responses import JSONResponse # type: ignore
+from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File 
+import os, secrets, uvicorn 
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials 
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from src.config.settings import Settings, get_setting
 from src.config.appconfig import settings as app_settings
 from functools import partial
-from langchain_openai import ChatOpenAI # type: ignore
+from langchain_openai import ChatOpenAI 
 
 MAX_ITERATIONS = 10
 
@@ -143,121 +145,297 @@ async def ingress_file_doc(file: UploadFile = File(...)):
     return await ingress_file_doc(file.filename, file_path)
 
 
-@app.post("/retrieve")
-async def retrieve_query(requestModel: RequestModel, feedback: str = None):
-    """
-    Endpoint to handle retrieving information based on a user's query and optionally accept feedback.
-    """
-    input_state = {
-        "user_query": requestModel.user_query
-    }
-    graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate)
-
-    config = RunnableConfig(
-        recursion_limit=10,
-        configurable={"thread_id": "1"},
-    )
-
-    response = "No valid answer generated."
-
-    async for step in graph.astream(input_state, config=config):
-        # If it's an interrupt, optionally inject feedback and resume
-        if step.get("is_interrupt", False):
-            if feedback:
-                step["state"]["feedback"] = feedback  # Replace suggestions with feedback
-
-            # Resume and continue iteration
-            resumed = await graph.resume(step["state"], step["next"])
-            response = resumed.get("candidate", {}).get("content", response)
-            break
-        else:
-            # Save response from the last step in case it's the final one
-            state_candidate = step.get("state", {}).get("candidate", {})
-            if isinstance(state_candidate, dict):
-                response = state_candidate.get("content", response)
-
-    return JSONResponse(content={
-        "response": response
-    })
-
-
+# @app.post("/retrieve")
 # async def retrieve_query(requestModel: RequestModel, feedback: str = None):
 #     """
-#     Endpoint to stream responses for a user query using a LangChain-style graph,
-#     logging retrieved examples and assistant replies directly.
+#     Endpoint to handle retrieving information based on a user's query and optionally accept feedback.
 #     """
-#     input_state = {
-#         "user_query": requestModel.user_query
+#     initial_state = {
+#         "user_query": requestModel.user_query,
+#         "generated_post": [],
+#         "examples": [],
+#         "critic_feedback": [],
+#         "evaluation_result": "",
+#         "human_feedback": [],
+#         "final_post": "",
 #     }
 
-#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate)
+#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate, human_node, END)
 
 #     config = RunnableConfig(
-#         recursion_limit=MAX_ITERATIONS,
+#         recursion_limit=10,
 #         configurable={"thread_id": "1"},
 #     )
 
-#     response_text = None
+#     # async for step in graph.astream(input_state, config=config):
+#     #     # If it's an interrupt, optionally inject feedback and resume
+#     #     if step.get("is_interrupt", False):
+#     #         if feedback:
+#     #             step["state"]["feedback"] = feedback  # Replace suggestions with feedback
 
-#     async for event in graph.astream(input_state, config=config):
-#         for value in event.values():
-#             messages = value.get("messages")
-#             if messages:
-#                 if isinstance(messages, list):
-#                     messages = messages[-1]
-#                 response_text = messages.content
-#                 print("Assistant:", response_text.replace("\n", "\\n")[:50])
-#             elif value.get("examples"):
-#                 print("Retrieved examples:\n\n", value["examples"][:100] + "...")
-#             elif value.get("candidate"):
-#                 print("Candidate Output:\n", str(value["candidate"].content)[:200])
-#                 response_text = value["candidate"].content
+#     #         # Resume and continue iteration
+#     #         resumed = await graph.resume(step["state"], step["next"])
+#     #         response = resumed.get("candidate", {}).get("content", response)
+#     #         break
+#     #     else:
+#     #         # Save response from the last step in case it's the final one
+#     #         state_candidate = step.get("state", {}).get("candidate", {})
+#     #         if isinstance(state_candidate, dict):
+#     #             response = state_candidate.get("content", response)
+
+#     for chunk in graph.astream(initial_state, config=config):
+#         for node_id, value in chunk.items():
+#             #  If we reach an interrupt, continuously ask for human feedback
+
+#             if(node_id == "__interrupt__"):
+#                 while True: 
+#                     user_feedback = input("Provide feedback (or type 'done' when finished): ")
+
+#                     # Resume the graph execution with the user's feedback
+#                     graph.invoke(Command(resume=user_feedback), config=config)
+
+#                     # Exit loop if user says done
+#                     if user_feedback.lower() == "done":
+#                         break
 
 #     return JSONResponse(content={
-#         "response": response_text or "No valid answer generated."
+#         "response": response
 #     })
+
+
+
+@app.post("/retrieve")
+async def retrieve_query(requestModel: RequestModel):
+    initial_state = {
+        "user_query": requestModel.user_query,
+        "candidate": None,
+        "examples": [],
+        "human_feedback": [],
+        "critic_feedback": "",
+        "status": Status.IN_PROGRESS,
+        "iteration": 0,
+    }
+
+    try:
+        # Create graph
+        graph = create_state_graph(
+            State, generate_draft, retrieve_examples, wrapped_critic, 
+            human_node, control_edge
+        )
+        
+        last_response = None
+        config = RunnableConfig(recursion_limit=10, configurable={"thread_id": "1"})
+        interrupt_reached = False
+
+        async for step in graph.astream(initial_state, config=config):
+            node_id = list(step.keys())[0]
+            value = step[node_id]
+
+            print(f"Current node: {node_id}")  # Debug print
+
+            match node_id:
+                case "draft":
+                    last_response = value.get("candidate", {})
+                    initial_state["candidate"] = last_response
+                    continue
+                    
+                case "retrieve":
+                    initial_state["examples"] = value.get("examples", [])
+                    continue
+                    
+                case "critic":
+                    initial_state["critic_feedback"] = value.get("critique", "")
+                    continue
+                    
+                case "__interrupt__":
+                    interrupt_reached = True
+
+                    proposal_content = last_response
+                    
+                    if not proposal_content:
+                        return JSONResponse(
+                            content={"error": "No proposal content generated"},
+                            status_code=500
+                        )
+
+                    # Safely convert Enum to string
+                    serializable_state = {
+                        **initial_state,
+                        "status": initial_state["status"].value
+                    }
+
+                    response_payload = {
+                        "interrupt": True,
+                        "message": "Please review the draft and provide your feedback.",
+                        "proposal": proposal_content,
+                        "feedback_options": [
+                            "approve - if the proposal is satisfactory",
+                            "revise - if changes are needed (please specify what to improve)"
+                        ],
+                        "state": serializable_state
+                    }
+
+                    # Log response
+                    logging.info("Returning response: %s", response_payload)
+
+                    return JSONResponse(content=response_payload, status_code=200)
+
+        # If no interrupt reached
+        if not interrupt_reached:
+            return JSONResponse(
+                content={"error": "Graph completed without reaching interrupt"},
+                status_code=500
+            )
+
+    except Exception as e:
+        logging.error("Error in retrieve_query: %s", str(e))
+        return JSONResponse(
+            content={"error": f"An error occurred: {str(e)}"},
+            status_code=500
+        )
+
+
+
+@app.post("/resume")
+async def resume_graph(payload: dict):
+    try:
+        state_data = payload["state"]
+        feedback = payload.get("feedback", "").lower()
+
+        raw_status = state_data.get("status", "in_progress").lower()
+        current_status = Status(raw_status) if raw_status in Status._value2member_map_ else Status.IN_PROGRESS
+
+        state = State(state_data)
+        state["human_feedback"].append(feedback)
+
+        # Update status based on feedback
+        if "approve" in feedback:
+            state["status"] = Status.APPROVED
+            return JSONResponse(
+                content={
+                    "response": "Proposal approved. Process complete.",
+                    "status": Status.APPROVED.value
+                },
+                status_code=200
+            )
+        elif "revise" in feedback:
+            state["status"] = Status.NEEDS_REVISION
+        else:
+            state["status"] = Status.IN_PROGRESS
+
+        # Re-create the graph
+        graph = create_state_graph(
+            State, generate_draft, retrieve_examples, wrapped_critic,
+            human_node, control_edge
+        )
+
+        # Apply feedback to config
+        base_config = RunnableConfig(recursion_limit=10, configurable={"thread_id": "1"})
+        updated_config = graph.update_state(
+            base_config,
+            values={"messages": [("user", feedback)]}
+        )
+
+        proposal_content = None
+        async for step in graph.astream(state, config=updated_config):
+            node_id = list(step.keys())[0]
+            value = step[node_id]
+
+            print(f"Processing node: {node_id}")
+
+            if node_id == "draft":
+                proposal_content = value.get("candidate", {})
+
+        if proposal_content:
+            # Return proposal and updated state
+            serializable_state = {
+                **state,
+                "status": state["status"].value
+            }
+
+            return JSONResponse(
+                content={
+                    "interrupt": True,
+                    "message": "Here is the revised proposal. Please review and provide feedback.",
+                    "proposal": proposal_content,
+                    "feedback_options": [
+                        "approve - if the proposal is satisfactory",
+                        "revise - if changes are needed (please specify what to improve)"
+                    ],
+                    "state": serializable_state
+                },
+                status_code=200
+            )
+        else:
+            return JSONResponse(
+                content={
+                    "response": "No proposal generated during resume.",
+                    "status": state["status"].value
+                },
+                status_code=500
+            )
+
+    except Exception as e:
+        logging.error(f"Resume error: {str(e)}")
+        return JSONResponse(
+            content={"error": f"Failed to resume graph: {str(e)}"},
+            status_code=500
+        )
+
+
+
 
 
 
 
 # @app.post("/retrieve")
-# async def retrieve_query(requestModel: RequestModel):
+# async def retrieve_query(requestModel: RequestModel, feedback: str = None):
 #     """
-#     Endpoint to handle retrieving information based on a user's query.
-#     This integrates the state machine with the RAG process.
+#     Endpoint to retrieve a post based on a LinkedIn topic and handle human feedback during interruptions.
 #     """
-#     initial_state = State(input=requestModel.user_query)
-    
-#     # Run the graph and get the final state after processing
-#     for step in graph.stream(initial_state):
-#         if step.is_interrupt:
-#             while True:
-#                 user_input = input("Do you accept this proposal? (y/n): ").lower()
-#                 if user_input == "y":
-#                     step.state["status"] = "success"  # Proceed if the user accepts
-#                     break
-#                 elif user_input == "n":
-#                     step.state["status"] = "retry"  # Mark as retry and ask for feedback
-#                     feedback = input("Please provide feedback on why you rejected the proposal: ")
-#                     step.state["suggestions"] = step.state.get("suggestions", []) + [feedback]  # Save feedback
-#                     print(f"Feedback recorded: {feedback}. Processing your feedback...")
-#                     break
-#                 else:
-#                     print("Invalid input. Please enter 'y' for accept or 'n' for reject.")
-            
-#             # Resume the flow after feedback is collected
-#             final_state = graph.resume(step.state, step.next)
-#             break
-    
-#     # Retrieve the final response and feedback (if any)
-#     response = final_state.get("candidate").content if final_state else "No valid answer generated."
-#     suggestions = final_state.get("suggestions", [])
-    
-#     # Returning both the response and suggestions
-#     return JSONResponse(content={
-#         "response": response,
-#         "suggestions": suggestions
-#     })
+#     # Build initial state from the user query
+#     initial_state = {
+#         "user_query": requestModel.user_query,
+#         "candidate": [],
+#         "examples": [],
+#         "critic_feedback": [],
+#         "evaluation_result": "",
+#         "human_feedback": [],
+#         "final_post": "",
+#         "iteration": 0,
+#     }
+
+#     # Create the state graph
+#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate, human_node, end_node)
+
+#     config = RunnableConfig(
+#         recursion_limit=10,
+#         configurable={"thread_id": "1"},
+#     )
+
+#     response = ""
+
+#     async for step in graph.astream(initial_state, config=config):
+#         node_id = list(step.keys())[0]
+#         value = step[node_id]
+
+#         # If the graph is interrupted, collect feedback and resume
+#         if node_id == "__interrupt__":
+#             if feedback:
+#                 step["state"]["feedback"] = feedback
+#                 resumed = await graph.resume(step["state"], step["next"])
+#                 response = resumed.get("candidate", {}).get("content", "")
+#                 break
+#             else:
+#                 return JSONResponse(content={"error": "Feedback required to continue."}, status_code=400)
+#         else:
+#             # Save last response if it's a candidate
+#             state_candidate = step.get("state", {}).get("candidate", {})
+#             if isinstance(state_candidate, dict):
+#                 response = state_candidate.get("content", response)
+
+#     return JSONResponse(content={"response": response})
+
         
         
 if __name__ == "__main__":

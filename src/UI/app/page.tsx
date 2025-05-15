@@ -39,9 +39,163 @@
  */
 
 
+// "use client"
+
+// import { useState } from "react"
+// import { useEffect } from "react"
+// import { Message } from "ai"
+// import Bubble from "./components/Bubble"
+// import LoadingBubble from "./components/LoadingBubble"
+// import PromptSuggestionsRow from "./components/PromptSuggestionsRow"
+// import Image from "next/image"
+// import Artboard_3 from "./assets/Artboard_3.png"
+// import { useCustomChat } from "./components/Hooks"
+
+// const Home = () => {
+//   const [mode, setMode] = useState<"upload" | "chat" | null>(null)
+//   const [file, setFile] = useState<File | null>(null)
+//   const [uploadStatus, setUploadStatus] = useState("")
+
+//   const {
+//     append,
+//     isLoading,
+//     messages,
+//     input,
+//     handleInputChange,
+//     handleSubmit,
+//     interrupted,
+//   } = useCustomChat("http://127.0.0.1:8000/retrieve") // explicitly set your retrieve endpoint
+
+//   const noMessages = !messages || messages.length === 0
+
+//   const handlePrompt = (promptText: string) => {
+//     const msg: Message = {
+//       id: crypto.randomUUID(),
+//       content: promptText,
+//       role: "user",
+//     }
+//     append(msg)
+//   }
+
+//   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+//     const selected = e.target.files?.[0]
+//     if (selected) {
+//       setFile(selected)
+//     }
+//   }
+
+//   const handleFileUpload = async () => {
+//     if (!file) return
+
+//     const formData = new FormData()
+//     formData.append("file", file)
+
+//     try {
+//       const res = await fetch("http://127.0.0.1:8000/ingress-file", {
+//         method: "POST",
+//         body: formData,
+//       })
+
+//       if (res.ok) {
+//         setUploadStatus("✅ File uploaded successfully!")
+//       } else {
+//         setUploadStatus("❌ Upload failed. Try again.")
+//       }
+//     } catch (error) {
+//       console.error("Upload error:", error)
+//       setUploadStatus("❌ Upload failed. Check the console.")
+//     }
+//   }
+
+//   const scrollToBottom = () => {
+//     const container = document.querySelector("section.populated")
+//     if (container) {
+//       container.scrollTop = container.scrollHeight
+//     }
+//   }
+  
+//   useEffect(() => {
+//     if (!noMessages) scrollToBottom()
+//   }, [messages])  
+
+//   return (
+//     <main>
+//       <Image src={Artboard_3} width="250" alt="CDGA Logo" />
+
+//       {/* Step 1: Choose Mode */}
+//       {!mode && (
+//         <div className="mode-selector">
+//           <p>Welcome to CDGA’s Proposal Agent.
+//             I’m your virtual assistant, here to help you craft top-tier proposals rooted in CDGA’s 25+ years of international engineering and consultancy 
+//             experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I’ve got you covered.
+//             Would you like to upload a document or start drafting a proposal?
+//           </p>
+//           <button onClick={() => setMode("upload")}>📄 Upload Document</button>
+//           <button onClick={() => setMode("chat")}>💬 Draft Proposal</button>
+//         </div>
+//       )}
+
+//       {/* Step 2a: Upload Mode */}
+//       {mode === "upload" && (
+//         <div className="upload-section">
+//           <p>Select a file to upload:</p>
+//           <input type="file" onChange={handleFileChange} />
+//           <button onClick={handleFileUpload} disabled={!file}>
+//             Upload
+//           </button>
+//           <p>{uploadStatus}</p>
+//           <button onClick={() => setMode(null)}>⬅ Back</button>
+//         </div>
+//       )}
+
+//       {/* Step 2b: Chat Mode */}
+//       {mode === "chat" && (
+//         <>
+//           <section className={noMessages ? "" : "populated"}>
+//             {noMessages ? (
+//               <>
+//                 <p className="starter-text">
+//                   Welcome to CDGA’s Proposal Assistant.  
+//                   I’m here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work.  
+//                   Whether you're starting from scratch or need support developing sections for organizations like CTBTO or global energy partners,  
+//                   simply tell me what you need, and I’ll generate a clear and compelling proposal for your project.
+//                 </p>
+//                 <br />
+//                 <PromptSuggestionsRow onPromptClick={handlePrompt} />
+//               </>
+//             ) : (
+//               <>
+//                 {messages.map((message: unknown, index: any) => (
+//                   <Bubble key={`message-${index}`} message={message as Message} />
+//                 ))}
+//                 {isLoading && <LoadingBubble />}
+//               </>
+//             )}
+//           </section>
+
+//           {/* Form outside the scrollable area */}
+//           <form onSubmit={handleSubmit}>
+//             <input
+//               className="question-box"
+//               onChange={handleInputChange}
+//               value={input}
+//               placeholder={interrupted ? "Provide your feedback to continue..." : "Ask me something..."}
+//             />
+//             <input type="submit" />
+//           </form>
+//           <button onClick={() => setMode(null)}>⬅ Back</button>
+//         </>
+//       )}
+//     </main>
+//   )
+// }
+
+// export default Home
+
+
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Message } from "ai"
 import Bubble from "./components/Bubble"
 import LoadingBubble from "./components/LoadingBubble"
@@ -49,6 +203,28 @@ import PromptSuggestionsRow from "./components/PromptSuggestionsRow"
 import Image from "next/image"
 import Artboard_3 from "./assets/Artboard_3.png"
 import { useCustomChat } from "./components/Hooks"
+import ReactMarkdown from "react-markdown"
+
+
+const COMMON_PROMPTS = [
+  "Draft a proposal for power system upgrades",
+  "Create a technical proposal for CTBTO",
+  "Write a bid for international consulting work",
+  "Generate a proposal for remote site operations",
+]
+
+const FEEDBACK_OPTIONS = [
+  {
+    type: 'approve' as const,
+    label: 'Approve Proposal',
+    description: 'Accept the proposal as is'
+  },
+  {
+    type: 'revise' as const,
+    label: 'Request Revisions',
+    description: 'Suggest specific improvements or changes'
+  }
+]
 
 const Home = () => {
   const [mode, setMode] = useState<"upload" | "chat" | null>(null)
@@ -62,7 +238,11 @@ const Home = () => {
     input,
     handleInputChange,
     handleSubmit,
-  } = useCustomChat("http://127.0.0.1:8000/retrieve") // explicitly set your retrieve endpoint
+    interrupted,
+    feedbackOptions,
+    error,
+    setError
+  } = useCustomChat("http://127.0.0.1:8000/retrieve")
 
   const noMessages = !messages || messages.length === 0
 
@@ -105,36 +285,46 @@ const Home = () => {
     }
   }
 
+  const scrollToBottom = () => {
+    const container = document.querySelector("section.populated")
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
+  }
+  
+  useEffect(() => {
+    if (!noMessages) scrollToBottom()
+  }, [messages])
+
+  
+
   return (
     <main>
       <Image src={Artboard_3} width="250" alt="CDGA Logo" />
 
-      {/* Step 1: Choose Mode */}
       {!mode && (
         <div className="mode-selector">
-          <p>Welcome to CDGA’s Proposal Agent.
+          <p>
+            Welcome to CDGA’s Proposal Agent.
             I’m your virtual assistant, here to help you craft top-tier proposals rooted in CDGA’s 25+ years of international engineering and consultancy 
             experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I’ve got you covered.
-            Would you like to upload a document or start drafting a proposal?</p>
+            Would you like to upload a document or start drafting a proposal?
+          </p>
           <button onClick={() => setMode("upload")}>📄 Upload Document</button>
           <button onClick={() => setMode("chat")}>💬 Draft Proposal</button>
         </div>
       )}
 
-      {/* Step 2a: Upload Mode */}
       {mode === "upload" && (
         <div className="upload-section">
           <p>Select a file to upload:</p>
           <input type="file" onChange={handleFileChange} />
-          <button onClick={handleFileUpload} disabled={!file}>
-            Upload
-          </button>
+          <button onClick={handleFileUpload} disabled={!file}>Upload</button>
           <p>{uploadStatus}</p>
           <button onClick={() => setMode(null)}>⬅ Back</button>
         </div>
       )}
 
-      {/* Step 2b: Chat Mode */}
       {mode === "chat" && (
         <>
           <section className={noMessages ? "" : "populated"}>
@@ -145,27 +335,74 @@ const Home = () => {
                   I’m here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work.  
                   Whether you're starting from scratch or need support developing sections for organizations like CTBTO or global energy partners,  
                   simply tell me what you need, and I’ll generate a clear and compelling proposal for your project.
+
                 </p>
-                <br />
                 <PromptSuggestionsRow onPromptClick={handlePrompt} />
               </>
             ) : (
               <>
-                {messages.map((message: unknown, index: any) => (
-                  <Bubble key={`message-${index}`} message={message as Message} />
+                {messages.map((message, index) => (
+                  <div key={`message-${index}`} className="chat-bubble">
+                    {message.role === "assistant" ? (
+                      <div className="prose">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                    <p><strong>You:</strong> {message.content}</p>
+                    )}
+                  </div>
                 ))}
+
                 {isLoading && <LoadingBubble />}
               </>
             )}
           </section>
+
+          {/* Add error handling here, before feedback options */}
+          {error && (
+            <div className="error-message" role="alert">
+              <p>{error}</p>
+              <button 
+                onClick={() => setError(null)} 
+                className="error-dismiss"
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {interrupted && feedbackOptions.length > 0 && (
+            <div className="feedback-prompt">
+              <p>Please provide feedback:</p>
+              <ul>
+                {feedbackOptions.map((option, index) => (
+                  <li key={index}>{option}</li>
+                ))}
+              </ul>
+              <form onSubmit={handleSubmit}>
+                <input
+                  className="question-box"
+                  onChange={handleInputChange}
+                  value={input}
+                  placeholder="Enter your feedback..."
+                  disabled={isLoading}
+                />
+                <button type="submit" disabled={isLoading}>
+                  Send Feedback
+                </button>
+              </form>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             <input
               className="question-box"
               onChange={handleInputChange}
               value={input}
-              placeholder="Ask me something..."
+              placeholder={interrupted ? "Provide your feedback to continue..." : "Ask me something..."}
             />
-            <input type="submit" />
+            <input type="submit" value={interrupted ? "Send Feedback" : "Send"} />
           </form>
           <button onClick={() => setMode(null)}>⬅ Back</button>
         </>

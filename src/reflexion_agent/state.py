@@ -13,19 +13,27 @@ This state object is passed between agents to maintain consistency and support c
 """
 
 
-from typing import Annotated
+from enum import Enum
+from typing import Annotated, List
 from typing_extensions import TypedDict
-from langgraph.graph.message import AnyMessage, add_messages # type: ignore
-from langchain_core.messages.ai import AIMessage # type: ignore
+from langgraph.graph.message import add_messages
+from langchain_core.messages.ai import AIMessage 
+
+
+class Status(Enum):
+    APPROVED = "approved"     # Final approval given by human
+    NEEDS_REVISION = "revision"  # Changes requested by human
+    IN_PROGRESS = "in_progress"  # Initial/ongoing state
+    
 
 
 class State(TypedDict):
     user_query: str
-    # NEW! Candidate for retrieval + formatted fetched examples as "memory"
     candidate: AIMessage
     examples: str
-    # Repeated from Part 1
-    messages: Annotated[list[AnyMessage], add_messages]
+    messages: Annotated[list[str], add_messages]
     runtime_limit: int
-    status: str
-    iteration: str
+    human_feedback: Annotated[List[str], add_messages]
+    iteration: int
+    status: Status
+
