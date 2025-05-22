@@ -11,7 +11,11 @@ Text processing functions for cleaning and formatting content.
 """
 
 
+import ast
+import json
 import re
+from src.datamodel import ProposalStructure
+from src.structure_agent.defined_proposal_strucutre import proposal_structure
 from unstructured.cleaners.core import (
     clean,
     clean_non_ascii_chars,
@@ -19,8 +23,9 @@ from unstructured.cleaners.core import (
 ) # type: ignore
 from langchain_openai import OpenAI # type: ignore
 from src.config.appconfig import settings as app_settings
+from langchain_core.messages import AIMessage # type: ignore
 
-
+proposal_structure_json = json.dumps(proposal_structure(), indent=2)
 
 def unbold_text(text):
     # Mapping of bold numbers to their regular equivalents
@@ -135,108 +140,117 @@ def format_response(response):
     return formatted_response
 
 
-def generate_explicit_query(query):
-    """Expands the user query and merges expanded queries into a single, explicit query."""
+def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
+    """Expands the user query using the structure and merges it into a single, explicit query."""
     llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
 
+    # 🛠️ Parse structure if it's an AIMessage
+    if isinstance(structure, AIMessage):
+        try:
+            structure = ast.literal_eval(structure.content)
+        except Exception as e:
+            print("[generate_explicit_query] Failed to parse structure.content:", structure.content)
+            raise ValueError("Invalid format for structure.content") from e
+
+    structure_type = structure["type"]
+    sections = structure.get("sections", [])
+    subsections = structure.get("subsections", [])
+    lots = structure.get("lot_titles", [])
+    attachments_required = structure.get("attachments", False)
+
+    # Format structure parts
+    section_list = "\n".join([f"- {s}" for s in sections]) if sections else "N/A"
+    subsection_list = "\n".join([f"- {s}" for s in subsections]) if subsections else "N/A"
+    lot_list = "\n".join([f"- {l}" for l in lots]) if lots else "None"
+
     prompt = f"""
-    Given the following vague query:
+    You are a proposal planning assistant. Your goal is to transform the vague user query into an **explicit, detailed set of instructions** for writing a technical proposal.
+    
+    <context>
+    Understand the user **intent** before breaking down the queries.
+    - If the query is factual (e.g., "Who are CDGA’s primary international clients?" or "Can you write an Executive summary for what is requested on the RFQ?"),
+    break it down accordingly for a structured factual response.
+    - If the query is about generating a proposal (e.g., "Can you generate a proposal for a power infrastructure project in East Africa?"),
+    break it down strictly using the following structure: {proposal_structure_json}
+    </context>
 
-    '{query}'
+    Original user query:  
+    "{query}"
 
-    Expand this query into **seven structured subqueries** that break down the proposal into detailed components.
-    Ensure that the query includes **specific details** such as:
-    - The sender's company name, address, email, and phone number.
-    - The recipient’s name, position, organization, and address.
-    - A structured breakdown of the proposal, including scope of work, compliance, pricing, experience, and additional documents.
+    Identified Structure:
+    - Type: {structure_type}
+    - Sections:\n{section_list}
+    - Subsections:\n{subsection_list}
+    - LOT Titles:\n{lot_list}
+    - Attachments Required: {"Yes" if attachments_required else "No"}
 
-    Example:
+    Your job is to:
+    1. Break the query down into 20 detailed subqueries that reflect the above structure.
+    2. Connect each subsection to it's particular section
+    3. c
+    4. Finish with a "**Final Explicit Query**" combining all subqueries into one single request prompt that a proposal LLM can respond to.
 
-    **Original Query:** "Can you write a proposal based on the requirements in the RFQ?"
 
+    Format:
     **Expanded Queries:**
-    1. "Provide a formal header section with the sender's full company details (name, address, email, phone) and the recipient's details (name, position, organization, address)."
-    2. "Write a professional opening paragraph that introduces the company and states the purpose of the proposal."
-    3. "Describe the scope of work, breaking it into detailed sections for each service category (e.g., borehole rehabilitation and new drilling)."
-    4. "Provide a clear breakdown of pricing, including cost per lot and total project cost, specifying currency and payment terms."
-    5. "Outline a detailed project plan and timeline, including key milestones and deliverables."
-    6. "List all required compliance details, including adherence to RFQ terms, delivery timelines, insurance coverage, and taxation requirements."
-    7. "Outline the company's experience and qualifications, listing past projects, certifications, and key personnel expertise."
-    8. "List all necessary additional documents, such as bidder’s statement, vendor profile form, and statement of confirmation, etc."
+    1. ...
+    2. ...
+    ...
+    8. ...
 
-    **Final Explicit Query:**  
-    "Can you write a proposal based on the requirements in the RFQ, including:  
-    (1) A formal header with sender and recipient details,  
-    (2) An introduction stating the company’s expertise and purpose of the proposal,  
-    (3) A detailed scope of work for each service component,  
-    (4) A structured pricing breakdown with currency and payment terms,  
-    (5) A detailed project plan and timeline with milestones, and
-    (6) A section on compliance, including delivery, insurance, and taxation,  
-    (7) A section on experience and qualifications, highlighting past projects and key personnel, and  
-    (8) A section listing all required additional documents."
-
-    Now, generate an explicit query for:
-
-    '{query}'
+    **Final Explicit Query:**
+    "... <single, comprehensive prompt here> ..."
     """
-
     response = llm.invoke(prompt)
     return response.strip()
 
 
-def proposal_prompt():
-    return """
-    You are an expert proposal assistant. Generate a comprehensive proposal using ONLY information from these sources:
-    ---Knowledge Base---
-    {context_data}
+def proposal_prompt(user_query: str) -> str:
+    return f"""
+    User Query:
+    {user_query}
+
+    You are a senior-level technical writer for international engineering projects.
+
+    <context>
+    When a user asks a question, take your time to understand the intent before writing a response.
+    Ensure you have all the necessary information to provide a comprehensive answer.
+    You are provided with a knowledge base that contains information about the organization, its capabilities, and the specific project requirements.
+    The user may ask for a proposal, bid, or project plan, and you need to respond accordingly.
+    Do not write a proposal when the intent of the user is to retrieve a simple answer — that is why it is important that you understand the **intent of the user**.
+    Remember to use the information available to you. Do not include proposal structure elements when answering factual questions.
+    Avoid generic or templated responses — be specific, as in a real RFP breakdown.
+
+    When writing a proposal, strictly use the following structure:
+    {proposal_structure_json}
+
+    Focus on accuracy, professionalism, and completeness. Always end every proposal with a conclusion. No preambles.
+    </context>
+
+
+    Your task is to generate a complete, highly comprehensive technical proposal based on:
+    - The user’s request
+    - The expanded query provided
+    - The predefined structure including type, sections, subsections, and LOT titles
 
     ---Response Rules---
-    1. Do NOT use Markdown or special characters like `**`, `#`, or `-`. Use plain text formatting only.
-    2. Structure the proposal with clear section titles, separated by newlines.
-    3. NO placeholders like [Company Name]; use real data from the knowledge base or note it as missing if not found.
-    4. Use a professional tone.
-    5. SKIP COMPLIMENTARY CLOSINGS OR VALEDICTIONS
-    6. SKIP SALUTATION
+    - No Markdown, no special characters like *, #, etc.
 
-    ---Proposal Structure---
-    LETTERHEAD &  
-    - Display brand name, reg/vat numbers, and contact info  
+    Guidelines:
+    - Start each section on a new line with the section title clearly separated from the content.
+    - Use this format exactly:
+        Section Title
+        [followed by a blank line]
+        [Then begin the paragraph content...]
+    - Do NOT write the section title and content on the same line.
+    - Do NOT prefix section titles with punctuation (e.g., ":", "-", or "#").
+    - Follow the structure exactly as defined in the input.
+    - Use informative, well-developed paragraphs and include bullet points or numbered lists where helpful.
+    - Do not include greetings or closing remarks unless explicitly required.
+    - Use real-world detail and domain knowledge appropriate for organizations like CTBTO or UNDP.
+    - Incorporate feedback if provided.
 
-    INTRODUCTION 
-    - Greet the recipient briefly and outline purpose
-
-    PROJECT SCOPE  
-    - Detailed scope from the knowledge base  
-
-    EXCLUSIONS  
-    - List any out-of-scope items if mentioned  
-
-    DELIVERABLES  
-    - Clearly outline what will be delivered  
-
-    COMMERCIAL 
-    - Provide cost breakdown and payment terms in a tabular form  
-
-    SCHEDULE  
-    - Timeline or milestone details 
-
-    COMPLIANCE SECTION
-    - List all required compliance details, including adherence to RFQ terms, delivery timelines, insurance coverage, and taxation requirements.
-
-
-    EXPERIENCE & QUALIFICATIONS
-    - Outline the company's experience and qualifications, listing past projects, certifications, and key personnel expertise.
-
-    ADDITIONAL DOCUMENTS REQUIRED 
-    - List all necessary additional documents, such as bidder’s statement, vendor profile form, and statement of confirmation, etc.
-
-    CONCLUSION
-    - Summarize key points   
-
-    Yours Sincerely,
-    - Provide sign-off lines referencing Directors or authorized persons.
-
-    Current RFQ Requirements: {query}
+    Write clearly and professionally, as if this proposal will be submitted directly to a technical evaluation committee.
     """
 
 
@@ -317,3 +331,7 @@ def prompt_template():
 
     Please provide a detailed critique of the **Generated Proposal** based on the **Retrieved Proposal**.
     """
+
+
+
+

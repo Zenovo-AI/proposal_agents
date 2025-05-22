@@ -14,10 +14,11 @@ This state object is passed between agents to maintain consistency and support c
 
 
 from enum import Enum
+from os import replace
 from typing import Annotated, List
-from typing_extensions import TypedDict
-from langgraph.graph.message import add_messages
-from langchain_core.messages.ai import AIMessage 
+from typing_extensions import TypedDict # type: ignore
+from langgraph.graph.message import add_messages # type: ignore
+from langchain_core.messages.ai import AIMessage # type: ignore
 
 
 class Status(Enum):
@@ -36,4 +37,5 @@ class State(TypedDict):
     human_feedback: Annotated[List[str], add_messages]
     iteration: int
     status: Status
+    structure: Annotated[AIMessage, add_messages]
 

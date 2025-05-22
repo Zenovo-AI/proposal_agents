@@ -8,6 +8,7 @@
 */
 
 export const FEEDBACK_OPTIONS = [
+    "Approve",
     "Too vague",
     "Too generic",
     "Not aligned with scope",

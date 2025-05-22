@@ -27,7 +27,8 @@ module provides a structured approach for handling file uploads and processing t
 application environment.
 """
 
-
+import json
+import ast
 from pathlib import Path
 import traceback
 from src.cloud_storage.do_spaces import download_all_files
@@ -39,52 +40,32 @@ from langchain_core.messages import AIMessage # type: ignore
 from src.reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 
-# def start_node(state):
-#     user_query = state.get("user_query")
-#     if not user_query:
-#         raise ValueError("Missing 'user_query' in state.")
-#     return {"user_query": user_query}
-
-
-# async def generate_draft(state: dict, config: dict) -> dict:
-#     user_query = state["user_query"]  # ← pulled from state
-#     expanded_queries = generate_explicit_query(user_query)
-#     full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
-
-#     working_dir = Path("./analysis_workspace")
-#     download_all_files(working_dir)
-
-#     rag = await RAGFactory.create_rag(str(working_dir))
-#     rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
-#     cleaned_response = clean_text(rag_response)
-
-#     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
-
-#     candidate = AIMessage(content=cleaned_response)
-#     state["candidate"] = candidate
-#     state["messages"] = add_messages(state.get("messages", []), [candidate])
-#     state["status"] = "proposal_generated"
-
-#     return state
 
 async def generate_draft(state: dict, config: dict) -> dict:
     user_query = state["user_query"]
-    feedback = state["human_feedback"] if "human_feedback" in state else ["No Feedback yet"]
-    # Generate a more detailed query from the user input
-    expanded_queries = generate_explicit_query(user_query)
+    structure_proposal = state["structure"]
 
-    # Compose the prompt based on whether suggestions exist
+    feedback = state.get("human_feedback", ["No Feedback yet"])
+
+    # Step 2: Expand query using structured context
+    expanded_queries = generate_explicit_query(user_query, structure_proposal)
+    print("[generate_draft] Expanded Queries:", expanded_queries)
+
+    # Step 3: Build the full prompt
     if feedback:
         full_prompt = (
-            f"{proposal_prompt()}\n\n"
+            f"{proposal_prompt(user_query)}\n\n"
             f"User Query: {expanded_queries}\n\n"
             f"Previous Feedback to Improve: {feedback}\n\n"
             f"Please incorporate this feedback into the proposal."
         )
     else:
-        full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
+        full_prompt = (
+            f"{proposal_prompt(user_query)}\n\n"
+            f"User Query: {expanded_queries}"
+        )
 
-    # Run RAG process
+    # Step 4: Run RAG
     working_dir = Path("./analysis_workspace")
     download_all_files(working_dir)
     rag = await RAGFactory.create_rag(str(working_dir))
@@ -93,47 +74,13 @@ async def generate_draft(state: dict, config: dict) -> dict:
 
     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
 
-    # Store results in state
+    # Step 5: Save result to state
     candidate_text = cleaned_response
-    state["candidate"] = candidate_text
-    state["messages"] = add_messages(state.get("messages", []), [AIMessage(content=candidate_text)])
-
+    ai_msg = AIMessage(content=candidate_text)
+    state["candidate"] = ai_msg
+    state["messages"] = add_messages(state.get("messages", []), [ai_msg])
 
     return state
-
-
-
-
-# def generate_answer(user_query, chat_history=None):
-#     """Generates an answer from the chatbot based on user input."""
-
-#     if not user_query:
-#         return None
-
-#     try:
-#         # Step 1: Expand the query
-#         expanded_queries = generate_explicit_query(user_query)
-#         full_prompt = f"{proposal_prompt()}\n\nUser Query: {expanded_queries}"
-
-#         # Step 2: Setup working directory and download files
-#         working_dir = Path("./analysis_workspace")
-#         download_all_files(working_dir)
-
-#         # Step 3: Query RAG
-#         rag = RAGFactory.create_rag(str(working_dir))
-#         response = rag.query(full_prompt, QueryParam(mode="hybrid"))
-
-#         # Step 4: Store chat history (if provided)
-#         if chat_history is not None:
-#             chat_history.append(("You", user_query))
-#             chat_history.append(("Bot", response))
-
-#         # Step 5: Clean response and return
-#         return clean_text(response)
-
-#     except Exception as e:
-#         traceback.print_exc()
-#         return f"Error retrieving response: {e}"
 
 
 

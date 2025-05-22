@@ -67,8 +67,8 @@ async def ingress_file_doc(file_name: str, file_path: str = None, web_links: lis
         working_dir = Path("./analysis_workspace")
         working_dir.mkdir(parents=True, exist_ok=True)
 
-        rag = RAGFactory.create_rag(str(working_dir))
-        rag.insert(text_content)
+        rag = await RAGFactory.create_rag(str(working_dir))
+        await rag.ainsert(text_content)
 
         for file_path in working_dir.glob("*"):
             if file_path.is_file():

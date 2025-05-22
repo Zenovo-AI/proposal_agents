@@ -8,7 +8,8 @@ This model ensures structured validation of incoming data for querying specific 
 """
 
 
-from pydantic import BaseModel, Field
+from typing import List, Literal, TypedDict
+from pydantic import BaseModel, Field # type: ignore
 from enum import Enum
 
 class RequestModel(BaseModel):
@@ -20,3 +21,11 @@ class RequestModel(BaseModel):
 class Status(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+
+class ProposalStructure(TypedDict):
+    type: Literal["full_proposal", "partial_plan", "factual_query"]
+    sections: List[str]
+    subsections: List[str]
+    lot_titles: List[str]
+    attachments: bool
+

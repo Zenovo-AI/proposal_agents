@@ -11,34 +11,48 @@ Also configures middleware for CORS, security, and handles different modes (deve
 """
 
 
+from datetime import datetime
+import json
 import logging
+import traceback
+from urllib.parse import urlencode
+from googleapiclient.discovery import build # type: ignore
+from google.oauth2.credentials import Credentials # type: ignore
+import httpx # type: ignore
+from src.google_doc_integration.google_docs_helper import GoogleDocsHelper
+from src.google_doc_integration.google_drive_helper import GoogleDriveAPI
+from src.google_doc_integration.parse_proposal import parse_proposal_content
 from src.reflexion_agent.end_process import end_node
 from src.reflexion_agent.human_feedback import human_node
 from src.graph.node_edges import control_edge, create_state_graph
 from src.reflexion_agent.critic import critic
-from src.reflexion_agent.evaluate import evaluate
 from src.reflexion_agent.retriever import retrieve_examples
 from src.reflexion_agent.state import State, Status
 from src.datamodel import RequestModel
 from src.rag_agent.inference import generate_draft
 from src.rag_agent.ingress import ingress_file_doc
-from langchain_core.runnables import RunnableConfig 
-from langgraph.types import Command
-from langchain_openai import OpenAI 
+from langchain_core.runnables import RunnableConfig # type: ignore
+from langchain_openai import OpenAI # type: ignore
 from src.db_helper import initialize_database
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status, Depends, HTTPException, UploadFile, File 
-import os, secrets, uvicorn 
-from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
-from fastapi.security import HTTPBasic, HTTPBasicCredentials 
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from src.config.settings import Settings, get_setting
+from fastapi import FastAPI, Request, status, HTTPException, UploadFile, File # type: ignore
+from src.structure_agent.structureAgent import structure_node
+import os, uvicorn # type: ignore
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
+from fastapi.security import HTTPBasic # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+from starlette.middleware.sessions import SessionMiddleware # type: ignore
+from itsdangerous import URLSafeTimedSerializer # type: ignore
+from starlette.config import Config # type: ignore
+from authlib.integrations.starlette_client import OAuth, OAuthError # type: ignore
+from fastapi.responses import JSONResponse, RedirectResponse # type: ignore
+from src.config.settings import get_setting
 from src.config.appconfig import settings as app_settings
 from functools import partial
-from langchain_openai import ChatOpenAI 
-
-MAX_ITERATIONS = 10
+from langchain_openai import ChatOpenAI # type: ignore
+from authlib.integrations.starlette_client.apps import StarletteOAuth2App # type: ignore
+from fastapi.exceptions import RequestValidationError # type: ignore
+from fastapi.exception_handlers import request_validation_exception_handler # type: ignore
 
 # Get application settings from the settings module
 settings = get_setting()
@@ -92,21 +106,61 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "*",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 # Instantiate basicAuth
 security = HTTPBasic()
 
-# Add middleware to allow CORS requests
+serializer = URLSafeTimedSerializer(app_settings.session_secret_key)
+# Add CORS middleware first
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=True,  # 🔥 Necessary to allow cookies
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Add Session middleware AFTER CORS
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=serializer.secret_key,
+    session_cookie="session",
+    same_site="lax",         # or "none" if using HTTPS
+    https_only=False,        # ✅ False for local dev
+)
+
+
+
+# Get the directory of the current file
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Define the auth cache directory
+auth_cache_dir = os.path.join(base_dir, "auth_cache")
+
+# Create full paths for the credentials and status file
+credentials_path = os.path.join(auth_cache_dir, "credentials.json")
+auth_status_path = os.path.join(auth_cache_dir, "auth_success.txt")
+state_path = os.path.join(auth_cache_dir, "oauth_state.txt")
+
+oauth = OAuth(Config(environ={
+    'GOOGLE_CLIENT_ID': app_settings.client_id,
+    'GOOGLE_CLIENT_SECRET': app_settings.client_secret,
+}))
+
+oauth.register(
+    name='google',
+    client_id=app_settings.client_id,
+    client_secret=app_settings.client_secret,
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents',
+    }
+)
+
 
 # Assuming you already initialized your llm like:
 llm = ChatOpenAI(
@@ -116,6 +170,89 @@ llm = ChatOpenAI(
 
 # Wrap the critic function to always pass in the LLM
 wrapped_critic = partial(critic, llm=llm)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print("Validation error:", exc.errors())
+    return await request_validation_exception_handler(request, exc)
+
+@app.get("/login")
+async def login():
+    query_params = {
+        "client_id": app_settings.client_id,
+        "redirect_uri": app_settings.redirect_uri_1,
+        "response_type": "code",
+        "scope": "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents",
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    url = f"{app_settings.google_auth_endpoint}?{urlencode(query_params)}"
+    return RedirectResponse(url)
+
+
+
+@app.get("/auth")
+async def auth(request: Request):
+    code = request.query_params.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code")
+    
+    data = {
+        "code": code,
+        "client_id": app_settings.client_id,
+        "client_secret": app_settings.client_secret,
+        "redirect_uri": app_settings.redirect_uri_1,
+        "grant_type": "authorization_code",
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(app_settings.google_token_endpoint, data=data)
+        token_data = response.json()
+        access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token")
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Failed to obtain access token")
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+        }
+        userinfo_response = await client.get(app_settings.google_userinfo_endpoint, headers=headers)
+        userinfo = userinfo_response.json()
+
+        return RedirectResponse(
+            f"{app_settings.redirect_uri_2}/profile"
+            f"?name={userinfo['name']}"
+            f"&email={userinfo['email']}"
+            f"&picture={userinfo['picture']}"
+            f"&access_token={access_token}"
+            f"&refresh_token={refresh_token or ''}"
+        )
+
+
+@app.get("/logout")
+async def logout():
+    # No server-side data to clear; just redirect to login page
+    return RedirectResponse(url=app_settings.redirect_uri_3)
+
+
+@app.get("/api/me")
+async def me(request: Request):
+    user_info = request.query_params
+    name = user_info.get("name")
+    email = user_info.get("email")
+    picture = user_info.get("picture")
+
+    return {
+        "user" : {
+            "name": name,
+            "email": email,
+            "picture": picture
+        }
+    }
+    
+
 
 # Define a health check endpoint
 @app.get("/", status_code=status.HTTP_200_OK)
@@ -134,7 +271,7 @@ def health():
     return "healthy"
 
 @app.post("/ingress-file")
-async def ingress_file_doc(file: UploadFile = File(...)):
+async def uploadFile(file: UploadFile = File(...)):
     try:
         file_path = f"src/doc/{file.filename}"
         with open(file_path, "wb") as f:
@@ -143,64 +280,6 @@ async def ingress_file_doc(file: UploadFile = File(...)):
     except Exception as e:
         return {"message": e.args}
     return await ingress_file_doc(file.filename, file_path)
-
-
-# @app.post("/retrieve")
-# async def retrieve_query(requestModel: RequestModel, feedback: str = None):
-#     """
-#     Endpoint to handle retrieving information based on a user's query and optionally accept feedback.
-#     """
-#     initial_state = {
-#         "user_query": requestModel.user_query,
-#         "generated_post": [],
-#         "examples": [],
-#         "critic_feedback": [],
-#         "evaluation_result": "",
-#         "human_feedback": [],
-#         "final_post": "",
-#     }
-
-#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate, human_node, END)
-
-#     config = RunnableConfig(
-#         recursion_limit=10,
-#         configurable={"thread_id": "1"},
-#     )
-
-#     # async for step in graph.astream(input_state, config=config):
-#     #     # If it's an interrupt, optionally inject feedback and resume
-#     #     if step.get("is_interrupt", False):
-#     #         if feedback:
-#     #             step["state"]["feedback"] = feedback  # Replace suggestions with feedback
-
-#     #         # Resume and continue iteration
-#     #         resumed = await graph.resume(step["state"], step["next"])
-#     #         response = resumed.get("candidate", {}).get("content", response)
-#     #         break
-#     #     else:
-#     #         # Save response from the last step in case it's the final one
-#     #         state_candidate = step.get("state", {}).get("candidate", {})
-#     #         if isinstance(state_candidate, dict):
-#     #             response = state_candidate.get("content", response)
-
-#     for chunk in graph.astream(initial_state, config=config):
-#         for node_id, value in chunk.items():
-#             #  If we reach an interrupt, continuously ask for human feedback
-
-#             if(node_id == "__interrupt__"):
-#                 while True: 
-#                     user_feedback = input("Provide feedback (or type 'done' when finished): ")
-
-#                     # Resume the graph execution with the user's feedback
-#                     graph.invoke(Command(resume=user_feedback), config=config)
-
-#                     # Exit loop if user says done
-#                     if user_feedback.lower() == "done":
-#                         break
-
-#     return JSONResponse(content={
-#         "response": response
-#     })
 
 
 
@@ -219,7 +298,7 @@ async def retrieve_query(requestModel: RequestModel):
     try:
         # Create graph
         graph = create_state_graph(
-            State, generate_draft, retrieve_examples, wrapped_critic, 
+            State, structure_node, generate_draft, retrieve_examples, wrapped_critic, 
             human_node, control_edge
         )
         
@@ -234,9 +313,15 @@ async def retrieve_query(requestModel: RequestModel):
             print(f"Current node: {node_id}")  # Debug print
 
             match node_id:
+                # case "draft":
+                #     last_response = value.get("candidate", {})
+                #     initial_state["candidate"] = last_response
+                #     continue
                 case "draft":
-                    last_response = value.get("candidate", {})
-                    initial_state["candidate"] = last_response
+                    ai_message = value.get("candidate", {})
+                    content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+                    last_response = content_str
+                    initial_state["candidate"] = content_str  # ✅ now it's JSON serializable
                     continue
                     
                 case "retrieve":
@@ -325,7 +410,7 @@ async def resume_graph(payload: dict):
 
         # Re-create the graph
         graph = create_state_graph(
-            State, generate_draft, retrieve_examples, wrapped_critic,
+            State, structure_node, generate_draft, retrieve_examples, wrapped_critic,
             human_node, control_edge
         )
 
@@ -343,8 +428,18 @@ async def resume_graph(payload: dict):
 
             print(f"Processing node: {node_id}")
 
+            # if node_id == "draft":
+            #     ai_message = value.get("candidate", {})
+            #     proposal_content = ai_message.content if hasattr(proposal_content, "content") else str(proposal_content)
+
             if node_id == "draft":
-                proposal_content = value.get("candidate", {})
+                ai_message = value.get("candidate")
+                if ai_message and hasattr(ai_message, "content"):
+                    proposal_content = ai_message.content
+                elif isinstance(ai_message, str):
+                    proposal_content = ai_message
+
+                
 
         if proposal_content:
             # Return proposal and updated state
@@ -383,58 +478,89 @@ async def resume_graph(payload: dict):
         )
 
 
+@app.post("/save-to-drive")
+async def save_to_google_drive(payload: dict):
+    try:
+        print("Incoming payload:", payload)
+        state = payload.get("state")
+        if not state:
+            raise HTTPException(status_code=400, detail="State missing from payload.")
+
+        messages = state.get("messages", [])
+        if not messages:
+            raise HTTPException(status_code=400, detail="No messages found in state.")
+
+
+        # Define the target substring to search for (lowercase for case-insensitive matching)
+        target_substring = "✅ proposal approved. you can now upload it to google docs."
+
+        last_approval_index = None
+        # Iterate over messages to find all assistant messages containing the target substring
+        for index, message in enumerate(messages):
+            if message.get("role") == "assistant":
+                content = message.get("content", "")
+                if content and target_substring in content.lower():
+                    last_approval_index = index
+
+        # If no approval message was found, raise an error
+        if last_approval_index is None:
+            raise HTTPException(status_code=404, detail="No approval message found in the conversation.")
+        
+        # Search backwards from the approval message for the immediately preceding assistant message
+        for prev_index in range(last_approval_index - 1, -1, -1):
+            prev_message = messages[prev_index]
+            if prev_message.get("role") == "assistant":
+                proposal_text = prev_message.get("content", "")
+                break
 
 
 
+        # === Google Drive Logic ===
+        token_info = {
+            "client_id": app_settings.client_id,
+            "client_secret": app_settings.client_secret,
+            "refresh_token": payload["refresh_token"],
+            "token_uri": app_settings.google_token_endpoint,
+        }
 
+        creds = Credentials.from_authorized_user_info(token_info)
+        docs_service = build("docs", "v1", credentials=creds)
+        drive_service = build("drive", "v3", credentials=creds)
 
-# @app.post("/retrieve")
-# async def retrieve_query(requestModel: RequestModel, feedback: str = None):
-#     """
-#     Endpoint to retrieve a post based on a LinkedIn topic and handle human feedback during interruptions.
-#     """
-#     # Build initial state from the user query
-#     initial_state = {
-#         "user_query": requestModel.user_query,
-#         "candidate": [],
-#         "examples": [],
-#         "critic_feedback": [],
-#         "evaluation_result": "",
-#         "human_feedback": [],
-#         "final_post": "",
-#         "iteration": 0,
-#     }
+        drive_api = GoogleDriveAPI(drive_service)
 
-#     # Create the state graph
-#     graph = create_state_graph(State, generate_draft, retrieve_examples, wrapped_critic, evaluate, human_node, end_node)
+        TEMPLATE_NAME = "ProposalTemplate"
+        template_id = drive_api.get_template_id(TEMPLATE_NAME)
+        if not template_id:
+            raise HTTPException(status_code=404, detail=f"Template '{TEMPLATE_NAME}' not found")
 
-#     config = RunnableConfig(
-#         recursion_limit=10,
-#         configurable={"thread_id": "1"},
-#     )
+        proposals_folder_id = drive_api.create_folder("Proposals")
+        date_folder_id = drive_api.create_folder(datetime.now().strftime("%Y-%m-%d"), parent_folder_id=proposals_folder_id)
 
-#     response = ""
+        docs_helper = GoogleDocsHelper(docs_service, drive_service)
+        # replacements = parse_proposal_content(proposal_text)
+        doc_name = f"Proposal_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        new_doc_id = docs_helper.copy_template(template_id, doc_name)
+        docs_helper.replace_placeholder(new_doc_id, "{BODY}", proposal_text)
+        
 
-#     async for step in graph.astream(initial_state, config=config):
-#         node_id = list(step.keys())[0]
-#         value = step[node_id]
+        drive_service.files().update(
+            fileId=new_doc_id,
+            addParents=date_folder_id,
+            removeParents='root'
+        ).execute()
 
-#         # If the graph is interrupted, collect feedback and resume
-#         if node_id == "__interrupt__":
-#             if feedback:
-#                 step["state"]["feedback"] = feedback
-#                 resumed = await graph.resume(step["state"], step["next"])
-#                 response = resumed.get("candidate", {}).get("content", "")
-#                 break
-#             else:
-#                 return JSONResponse(content={"error": "Feedback required to continue."}, status_code=400)
-#         else:
-#             # Save last response if it's a candidate
-#             state_candidate = step.get("state", {}).get("candidate", {})
-#             if isinstance(state_candidate, dict):
-#                 response = state_candidate.get("content", response)
+        view_link = docs_helper.generate_view_link(new_doc_id)
 
-#     return JSONResponse(content={"response": response})
+        return JSONResponse(content={"message": "Upload successful", "view_link": view_link})
+
+    except Exception as e:
+        logging.error("Failed to save proposal to Google Drive", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": traceback.format_exc()}
+        )
+
 
         
         
