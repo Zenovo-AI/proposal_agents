@@ -564,14 +564,14 @@ async def save_to_google_drive(payload: dict):
 
         
         
-if __name__ == "__main__":
-    # Retrieve environment variables for host, port, and timeout
-    timeout_keep_alive = int(os.getenv("YOUR_TIMEOUT_IN_SECONDS", 6000))
+# if __name__ == "__main__":
+#     # Retrieve environment variables for host, port, and timeout
+#     timeout_keep_alive = int(os.getenv("YOUR_TIMEOUT_IN_SECONDS", 6000))
 
-    # Run the application with the specified host, port, and timeout
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=int(app_settings.port),
-        timeout_keep_alive=timeout_keep_alive,
-    )
+#     # Run the application with the specified host, port, and timeout
+#     uvicorn.run(
+#         app,
+#         host="0.0.0.0",
+#         port=int(app_settings.port),
+#         timeout_keep_alive=timeout_keep_alive,
+#     )
