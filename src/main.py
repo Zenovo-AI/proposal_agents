@@ -176,9 +176,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.get("/login")
 async def login():
+    if app_settings.environment == "development":
+        redirect_uri = "http://localhost:8000/auth"
+    else:
+        redirect_uri = app_settings.redirect_uri_1  # Use production URI
+
     query_params = {
         "client_id": app_settings.client_id,
-        "redirect_uri": app_settings.redirect_uri_1,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents",
         "access_type": "offline",

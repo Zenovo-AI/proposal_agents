@@ -32,7 +32,6 @@ class AppSettings:
     openai_api_base = os.getenv("OPENAI_API_BASE")
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
-    redirect_uri = os.getenv("REDIRECT_URI")
     do_spaces_secret_key = os.getenv("DO_SPACES_SECRET_KEY")
     do_spaces_access_key = os.getenv("DO_SPACES_ACCESS_KEY")
     client_secret_b64 = os.getenv("GOOGLE_AUTH_CLIENT_SECRET_B64")
