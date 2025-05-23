@@ -11,15 +11,28 @@ This module loads a PDF document and sets up a retriever to find similar example
 This is helpful for applications where a user writes proposals, and you want to fetch past examples to improve or critique the new one.
 """
 
-
+import os
 from langchain_community.document_loaders import PyPDFLoader # type: ignore
+from langchain_unstructured import UnstructuredLoader # type: ignore
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_core.messages.ai import AIMessage # type: ignore
 from langchain_community.retrievers import BM25Retriever # type: ignore
 from reflexion_agent.state import State
 
-loader = PyPDFLoader(r"C:\Users\Nigga-X\Authur\proposalGenerator_Agent\src\doc\ctbto_rfq_no._2024-0108_cdga_technical_proposal.pdf")
-documents = loader.load_and_split()
+# Go up one level from reflexion_agent to src
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+file_path = os.path.join(base_dir, "doc", "ctbto_rfq_no._2024-0108_cdga_technical_proposal.pdf")
+
+
+# Load PDF
+if os.path.exists(file_path):
+    print(f"Loading PDF: {file_path}")
+    loader = PyPDFLoader(file_path)
+    documents = loader.load()
+    print(f"Successfully loaded {len(documents)} pages.")
+else:
+    raise FileNotFoundError(f"The file was not found at: {file_path}")
+
 
 retriever = BM25Retriever.from_documents(documents)
 
