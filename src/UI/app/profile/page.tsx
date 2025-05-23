@@ -1,73 +1,9 @@
-// "use client";
-
-// import { useSearchParams, useRouter } from "next/navigation";
-// import { useEffect, useState } from "react";
-
-// export default function ProfilePage() {
-//   const searchParams = useSearchParams();
-//   const router = useRouter();
-//   const [user, setUser] = useState<{ name: string; email: string; picture: string } | null>(null);
-
-//   useEffect(() => {
-//     const name = searchParams.get("name");
-//     const email = searchParams.get("email");
-//     const picture = searchParams.get("picture");
-//     const accessToken = searchParams.get("access_token");
-//     const refreshToken = searchParams.get("refresh_token");
-
-//     if (name && email && picture) {
-//       const userData = { name, email, picture };
-//       setUser(userData);
-//       localStorage.setItem("user", JSON.stringify(userData));
-
-//       if (accessToken) {
-//         localStorage.setItem("access_token", accessToken);
-//       }
-
-//       if (refreshToken) {
-//         localStorage.setItem("refresh_token", refreshToken);
-//       }
-//     }
-//   }, [searchParams]);
-
-//   if (!user) return <p>Loading user info...</p>;
-
-//   return (
-//     <main>
-//       <h1>Welcome, {user.name}</h1>
-//       <p>Email: {user.email}</p>
-//       <img
-//         src={user.picture}
-//         alt={`${user.name}'s profile`}
-//         style={{
-//           width: "150px",
-//           height: "150px",
-//           borderRadius: "50%",
-//           objectFit: "cover",
-//           marginTop: "10px",
-//         }}
-//       />
-
-//       <button
-//         onClick={() => {
-//           router.push("/"); // Redirect to your Home page
-//         }}
-//         style={{
-//           marginTop: "20px",
-//           padding: "10px 20px",
-//           fontSize: "16px",
-//           cursor: "pointer",
-//           borderRadius: "5px",
-//           border: "none",
-//           backgroundColor: "#0070f3",
-//           color: "#fff",
-//         }}
-//       >
-//         Proceed to Proposal Assistant
-//       </button>
-//     </main>
-//   );
-// }
+/**
+ * this is a client component
+ * and it is used to display the login page
+ * and handle the login process
+ * and it is used to display the login page
+ */ 
 
 
 "use client";

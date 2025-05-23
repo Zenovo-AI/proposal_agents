@@ -30,7 +30,7 @@ export default function LoginPage({ notice }: LoginPageProps) {
       <h1>Welcome to CDGA Proposal Agent</h1>
       <p className="status-message">{STATUS_MESSAGES[statusIndex]}</p>
       <a
-        href="http://localhost:8000/login"
+        href="https://proposal-generator-app-b2pah.ondigitalocean.app/login"
         className="btn btn-primary"
         aria-label="Login with Google"
       >

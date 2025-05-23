@@ -255,10 +255,10 @@ async def me(request: Request):
 @app.get("/", status_code=status.HTTP_200_OK)
 def index(response_class=JSONResponse):
     return {
-        "ApplicationName": "Health Policy Chatbot",
-        "ApplicationOwner": "Your Company",
+        "ApplicationName": "Proposal Generator Agent", 
+        "ApplicationOwner": "Zenovo-AI",
         "ApplicationVersion": "0.1.0",
-        "ApplicationEngineer": "Your name",
+        "ApplicationEngineer": "CertifiedAuthur",
         "ApplicationStatus": "running...",
     }
 

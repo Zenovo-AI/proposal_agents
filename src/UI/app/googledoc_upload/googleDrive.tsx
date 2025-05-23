@@ -8,7 +8,7 @@ export async function uploadToGoogleDocs(proposalText: string, state: object): P
 
   console.log("State being sent:", state)
 
-  const response = await fetch("http://127.0.0.1:8000/save-to-drive", {
+  const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/save-to-drive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
