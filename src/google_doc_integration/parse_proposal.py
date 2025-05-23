@@ -1,7 +1,7 @@
 # Parse generated content into template structure
 import json
 import logging
-from src.google_doc_integration.extract_sections import extract_section
+from google_doc_integration.extract_sections import extract_section
 
 
 # Helper Function to Clean and Parse JSON

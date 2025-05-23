@@ -1,4 +1,4 @@
-from src.reflexion_agent.state import State
+from reflexion_agent.state import State
 
 
 def end_node(state: State): 

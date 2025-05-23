@@ -1,11 +1,11 @@
 from typing import TypedDict, List, Literal
-from src.datamodel import ProposalStructure
+from datamodel import ProposalStructure
 from langchain_core.runnables import Runnable  # type: ignore
 from langchain_openai import ChatOpenAI # type: ignore
 from langchain_core.messages import AIMessage # type: ignore
 from langchain_core.prompts import ChatPromptTemplate # type: ignore
-from src.reflexion_agent.state import State
-from src.structure_agent.defined_proposal_strucutre import proposal_structure
+from reflexion_agent.state import State
+from structure_agent.defined_proposal_strucutre import proposal_structure
 
 
 def create_structure_agent() -> Runnable:

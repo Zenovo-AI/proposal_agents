@@ -13,8 +13,8 @@ This is useful in reflexion loops where an LLM self-critiques and refines its ow
 """
 
 
-from src.reflexion_agent.state import State
-from src.utils import prompt_template
+from reflexion_agent.state import State
+from utils import prompt_template
 from langchain_core.messages import AIMessage # type: ignore
 from langchain_openai import ChatOpenAI # type: ignore
 from langchain_core.prompts import ChatPromptTemplate # type: ignore

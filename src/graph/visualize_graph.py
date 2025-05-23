@@ -1,10 +1,10 @@
-from src.reflexion_agent.human_feedback import human_node
-from src.rag_agent.inference import generate_draft
-from src.reflexion_agent.critic import critic as wrapped_critic
-from src.structure_agent.structureAgent import structure_node
-from src.reflexion_agent.retriever import retrieve_examples
-from src.reflexion_agent.state import State
-from src.graph.node_edges import control_edge, create_state_graph
+from reflexion_agent.human_feedback import human_node
+from rag_agent.inference import generate_draft
+from reflexion_agent.critic import critic as wrapped_critic
+from structure_agent.structureAgent import structure_node
+from reflexion_agent.retriever import retrieve_examples
+from reflexion_agent.state import State
+from graph.node_edges import control_edge, create_state_graph
 
 
 graph = create_state_graph(State, structure_node, generate_draft, retrieve_examples, wrapped_critic, human_node, control_edge)

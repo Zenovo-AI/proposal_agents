@@ -44,7 +44,7 @@ from lightrag import LightRAG # type: ignore
 from lightrag.llm.openai import openai_embed, gpt_4o_complete # type: ignore
 from lightrag.utils import EmbeddingFunc # type: ignore
 from lightrag.kg.shared_storage import initialize_pipeline_status # type: ignore
-from src.config.appconfig import settings as app_settings
+from config.appconfig import settings as app_settings
 
 # Embedding function using OpenAI
 def embedding_func(texts: list[str]) -> np.ndarray:

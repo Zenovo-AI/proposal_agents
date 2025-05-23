@@ -31,13 +31,13 @@ import json
 import ast
 from pathlib import Path
 import traceback
-from src.cloud_storage.do_spaces import download_all_files
-from src.rag_agent.lightrag_setup import RAGFactory
-from src.rag_agent.ingress import ingress_file_doc
+from cloud_storage.do_spaces import download_all_files
+from rag_agent.lightrag_setup import RAGFactory
+from rag_agent.ingress import ingress_file_doc
 from lightrag import QueryParam # type: ignore
-from src.utils import clean_text, generate_explicit_query, proposal_prompt
+from utils import clean_text, generate_explicit_query, proposal_prompt
 from langchain_core.messages import AIMessage # type: ignore
-from src.reflexion_agent.state import State
+from reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 
 

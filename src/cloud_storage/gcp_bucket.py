@@ -16,7 +16,7 @@ Key functions:
 import base64
 import json
 from pathlib import Path
-from src.config.appconfig import settings as app_settings
+from config.appconfig import settings as app_settings
 from google.oauth2 import service_account
 import gcsfs
 from datetime import datetime, timezone

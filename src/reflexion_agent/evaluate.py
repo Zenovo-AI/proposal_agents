@@ -13,7 +13,7 @@ This logic is useful in feedback loops where an AI agent refines its output by c
 
 
 import difflib
-from src.reflexion_agent.state import State
+from reflexion_agent.state import State
 
 SIMILARITY_THRESHOLD = 0.95  # How similar the proposals should be
 

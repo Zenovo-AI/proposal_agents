@@ -25,7 +25,7 @@ Note:
 import boto3
 from botocore.exceptions import ClientError
 from pathlib import Path
-from src.config.appconfig import settings as app_settings
+from config.appconfig import settings as app_settings
 
 SPACE_NAME = "lightrag-bucket"
 SPACE_REGION = "nyc3"  # change if yours differs

@@ -1,6 +1,6 @@
 from langgraph.checkpoint.memory import MemorySaver # type: ignore
 from langgraph.graph import END, StateGraph, START # type: ignore
-from src.reflexion_agent.state import State, Status
+from reflexion_agent.state import State, Status
 
 
 def control_edge(state: State):

@@ -4,7 +4,7 @@ It halts the graph execution at a designated point to await human feedback befor
 enabling real-time review and control over automated reasoning steps.
 """
 
-from src.reflexion_agent.state import State
+from reflexion_agent.state import State
 from langgraph.types import Command, interrupt
 from langgraph.graph import END
 

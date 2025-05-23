@@ -14,15 +14,15 @@ Text processing functions for cleaning and formatting content.
 import ast
 import json
 import re
-from src.datamodel import ProposalStructure
-from src.structure_agent.defined_proposal_strucutre import proposal_structure
+from datamodel import ProposalStructure
+from structure_agent.defined_proposal_strucutre import proposal_structure
 from unstructured.cleaners.core import (
     clean,
     clean_non_ascii_chars,
     replace_unicode_quotes,
 ) # type: ignore
 from langchain_openai import OpenAI # type: ignore
-from src.config.appconfig import settings as app_settings
+from config.appconfig import settings as app_settings
 from langchain_core.messages import AIMessage # type: ignore
 
 proposal_structure_json = json.dumps(proposal_structure(), indent=2)

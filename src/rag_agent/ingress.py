@@ -7,10 +7,10 @@ Ingests and processes document files or web links, extracting content and storin
 
 from pathlib import Path
 import sqlite3
-from src.document_processor import DocumentProcessor
-from src.db_helper import insert_file_metadata
-from src.cloud_storage.do_spaces import upload_file
-from src.rag_agent.lightrag_setup import RAGFactory
+from document_processor import DocumentProcessor
+from db_helper import insert_file_metadata
+from cloud_storage.do_spaces import upload_file
+from rag_agent.lightrag_setup import RAGFactory
 import traceback
 
 process_document = DocumentProcessor()

@@ -19,24 +19,22 @@ from urllib.parse import urlencode
 from googleapiclient.discovery import build # type: ignore
 from google.oauth2.credentials import Credentials # type: ignore
 import httpx # type: ignore
-from src.google_doc_integration.google_docs_helper import GoogleDocsHelper
-from src.google_doc_integration.google_drive_helper import GoogleDriveAPI
-from src.google_doc_integration.parse_proposal import parse_proposal_content
-from src.reflexion_agent.end_process import end_node
-from src.reflexion_agent.human_feedback import human_node
-from src.graph.node_edges import control_edge, create_state_graph
-from src.reflexion_agent.critic import critic
-from src.reflexion_agent.retriever import retrieve_examples
-from src.reflexion_agent.state import State, Status
-from src.datamodel import RequestModel
-from src.rag_agent.inference import generate_draft
-from src.rag_agent.ingress import ingress_file_doc
+from google_doc_integration.google_docs_helper import GoogleDocsHelper
+from google_doc_integration.google_drive_helper import GoogleDriveAPI
+from reflexion_agent.human_feedback import human_node
+from graph.node_edges import control_edge, create_state_graph
+from reflexion_agent.critic import critic
+from reflexion_agent.retriever import retrieve_examples
+from reflexion_agent.state import State, Status
+from datamodel import RequestModel
+from rag_agent.inference import generate_draft
+from rag_agent.ingress import ingress_file_doc
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_openai import OpenAI # type: ignore
-from src.db_helper import initialize_database
+from db_helper import initialize_database
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status, HTTPException, UploadFile, File # type: ignore
-from src.structure_agent.structureAgent import structure_node
+from structure_agent.structureAgent import structure_node
 import os, uvicorn # type: ignore
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
 from fastapi.security import HTTPBasic # type: ignore
@@ -46,11 +44,10 @@ from itsdangerous import URLSafeTimedSerializer # type: ignore
 from starlette.config import Config # type: ignore
 from authlib.integrations.starlette_client import OAuth, OAuthError # type: ignore
 from fastapi.responses import JSONResponse, RedirectResponse # type: ignore
-from src.config.settings import get_setting
-from src.config.appconfig import settings as app_settings
+from config.settings import get_setting
+from config.appconfig import settings as app_settings
 from functools import partial
 from langchain_openai import ChatOpenAI # type: ignore
-from authlib.integrations.starlette_client.apps import StarletteOAuth2App # type: ignore
 from fastapi.exceptions import RequestValidationError # type: ignore
 from fastapi.exception_handlers import request_validation_exception_handler # type: ignore
 
@@ -564,14 +561,14 @@ async def save_to_google_drive(payload: dict):
 
         
         
-# if __name__ == "__main__":
-#     # Retrieve environment variables for host, port, and timeout
-#     timeout_keep_alive = int(os.getenv("YOUR_TIMEOUT_IN_SECONDS", 6000))
+if __name__ == "__main__":
+    # Retrieve environment variables for host, port, and timeout
+    timeout_keep_alive = int(os.getenv("YOUR_TIMEOUT_IN_SECONDS", 6000))
 
-#     # Run the application with the specified host, port, and timeout
-#     uvicorn.run(
-#         app,
-#         host="0.0.0.0",
-#         port=int(app_settings.port),
-#         timeout_keep_alive=timeout_keep_alive,
-#     )
+    # Run the application with the specified host, port, and timeout
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(app_settings.port),
+        timeout_keep_alive=timeout_keep_alive,
+    )

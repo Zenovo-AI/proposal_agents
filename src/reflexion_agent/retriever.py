@@ -16,7 +16,7 @@ from langchain_community.document_loaders import PyPDFLoader # type: ignore
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_core.messages.ai import AIMessage # type: ignore
 from langchain_community.retrievers import BM25Retriever # type: ignore
-from src.reflexion_agent.state import State
+from reflexion_agent.state import State
 
 loader = PyPDFLoader(r"C:\Users\Nigga-X\Authur\proposalGenerator_Agent\src\doc\ctbto_rfq_no._2024-0108_cdga_technical_proposal.pdf")
 documents = loader.load_and_split()
