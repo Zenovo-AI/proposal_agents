@@ -25,6 +25,18 @@
 import { useState } from "react"
 import { Message } from "ai"
 
+interface State {
+  user_query: string;
+  candidate: Message;
+  examples: string;
+  messages: string[];
+  runtime_limit: number;
+  human_feedback: string[];
+  iteration: number;
+  structure: Message;
+}
+
+
 interface ProposalResponse {
   interrupt?: boolean
   proposal?: string
@@ -33,7 +45,7 @@ interface ProposalResponse {
   response?: string
   status?: string
   error?: string
-  state?: any
+  state?: State
 }
 
 export function useCustomChat(apiUrl: string) {
@@ -136,33 +148,6 @@ export function useCustomChat(apiUrl: string) {
     }
   }
 
-  const saveProposalToDrive = async (state: any): Promise<string | null> => {
-    const refresh_token = localStorage.getItem("refresh_token")
-    if (!refresh_token) {
-      setError("Google refresh token missing. Please log in or configure it first.")
-      return null
-    }
-  
-    try {
-      const response = await fetch(apiUrl.replace("/retrieve", "/save-to-drive"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state, refresh_token }),
-      })
-  
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Failed to save proposal: ${response.status}`)
-      }
-  
-      const data = await response.json()
-      return data.view_link || null
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error during save"
-      setError(errorMessage)
-      return null
-    }
-  }
 
   const sendFeedback = async (feedback: string) => {
     try {

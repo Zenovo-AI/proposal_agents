@@ -65,7 +65,6 @@ const Home = () => {
   const [uploading, setUploading] = useState(false)
   const [docLink, setDocLink] = useState<string | null>(null)
   const [notice] = useState<string | null>(null);
-  const [currentState, setCurrentState] = useState<any>(null); // Add currentState to the state
   const { user: authenticatedUser, loading } = useAuth();
   
   const {
@@ -133,7 +132,7 @@ const Home = () => {
   
   useEffect(() => {
     if (!noMessages) scrollToBottom()
-  }, [messages])
+  }, [messages, noMessages])
 
   const isApproved = messages.length > 0 && messages[messages.length - 1].content.includes("✅ Proposal approved")  
 
@@ -151,11 +150,13 @@ const Home = () => {
         <header className="app-header">
           <Image src={Artboard_3} width="250" alt="CDGA Logo" />
           <div className="user-info">
-            <img
-              src={authenticatedUser.picture}
-              alt="User profile"
-              style={{ width: "40px", borderRadius: "50%", marginRight: "10px" }}
-            />
+          <Image
+            src={authenticatedUser.picture}
+            alt="User profile"
+            width={40}
+            height={40}
+            style={{ borderRadius: '50%', marginRight: '10px' }}
+          />
             <div>
               <span><strong>Welcome, {authenticatedUser.name}</strong></span><br />
               <span>{authenticatedUser.email}</span>
