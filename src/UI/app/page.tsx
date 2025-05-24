@@ -188,9 +188,9 @@ const Home = () => {
       {!mode && (
         <div className="mode-selector">
           <p>
-            Welcome to CDGA’s Proposal Agent.
-            I’m your virtual assistant, here to help you craft top-tier proposals rooted in CDGA’s 25+ years of international engineering and consultancy 
-            experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I’ve got you covered.
+            Welcome to CDGA&apos;s Proposal Agent.
+            I&apos;m your virtual assistant, here to help you craft top-tier proposals rooted in CDGA&apos;s 25+ years of international engineering and consultancy 
+            experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I&apos;ve got you covered.
             Would you like to upload a document or start drafting a proposal?
           </p>
           <div className="buttons">
@@ -220,10 +220,10 @@ const Home = () => {
             {noMessages ? (
               <>
                 <p className="starter-text">
-                  Welcome to CDGA’s Proposal Assistant.  
-                  I’m here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work.  
+                  Welcome to CDGA&apos;s Proposal Assistant.  
+                  I&apos;m here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work.  
                   Whether you're starting from scratch or need support developing sections for organizations like CTBTO or global energy partners,  
-                  simply tell me what you need, and I’ll generate a clear and compelling proposal for your project.
+                  simply tell me what you need, and I&apos;ll generate a clear and compelling proposal for your project.
 
                 </p>
                 <PromptSuggestionsRow onPromptClick={handlePrompt} />

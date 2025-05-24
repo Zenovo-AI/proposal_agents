@@ -10,6 +10,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 
 export default function ProfilePage() {
   const searchParams = useSearchParams();
@@ -66,12 +67,12 @@ export default function ProfilePage() {
       >
         <h2>Welcome, {user.name}</h2>
         <p>{user.email}</p>
-        <img
+        <Image
           src={user.picture}
           alt={`${user.name}'s profile`}
+          width={120}
+          height={120}
           style={{
-            width: "120px",
-            height: "120px",
             borderRadius: "50%",
             objectFit: "cover",
             margin: "20px 0",
