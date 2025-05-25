@@ -103,8 +103,7 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
 ]
 
 # Instantiate basicAuth
