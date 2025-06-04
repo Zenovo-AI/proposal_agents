@@ -142,7 +142,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=serializer.secret_key,
     session_cookie="session",
-    same_site=None,         # or "none" if using HTTPS
+    same_site="none",         # or "none" if using HTTPS
     https_only=True,        # ✅ False for local dev
 )
 
@@ -315,9 +315,9 @@ async def auth(request: Request):
         response.set_cookie(
             key="user_session",
             value=signed_data,          # or signed_data if that's your token
-            httponly=True,
-            samesite="Lax",       # capitalized is fine, case-insensitive
-            secure=False          # False if localhost; True in production HTTPS
+            httponly=False,
+            samesite="none",       # capitalized is fine, case-insensitive
+            secure=True          # False if localhost; True in production HTTPS
         )
 
         return response
