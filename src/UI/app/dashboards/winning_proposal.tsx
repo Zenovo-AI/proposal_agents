@@ -107,11 +107,7 @@ function isValidDate(date: string | null): boolean {
   return !!date && !isNaN(Date.parse(date));
 }
 
-type WinningProposalPageProps = {
-  onBack: () => void;
-};
-
-const WinningProposalPage = ({ onBack }: WinningProposalPageProps) => {
+const WinningProposalPage = () => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,8 +141,12 @@ const WinningProposalPage = ({ onBack }: WinningProposalPageProps) => {
 
         const data = await response.json();
         setProposals(data.proposals || []);
-      } catch (err: any) {
-        setError(err.message || "Unknown error");
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Unknown error");
+        }
       } finally {
         setLoading(false);
       }
@@ -208,12 +208,19 @@ const WinningProposalPage = ({ onBack }: WinningProposalPageProps) => {
 
       const data = await response.json();
       setExportUrls((prev) => ({ ...prev, [proposal.proposal_id]: data.view_link }));
-    } catch (error: any) {
-      setExportErrors((prev) => ({
-        ...prev,
-        [proposal.proposal_id]: error.message || "Unknown export error",
-      }));
-    } finally {
+      } catch (error) {
+        if (error instanceof Error) {
+          setExportErrors((prev) => ({
+            ...prev,
+            [proposal.proposal_id]: error.message,
+          }));
+        } else {
+          setExportErrors((prev) => ({
+            ...prev,
+            [proposal.proposal_id]: "Unknown export error",
+          }));
+        }
+      } finally {
       setExportingIds((prev) => {
         const copy = new Set(prev);
         copy.delete(proposal.proposal_id);
