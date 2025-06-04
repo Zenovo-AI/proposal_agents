@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     """
     # STARTUP Call Check routine
     print(running_mode)
-    print()
+    logger.info("Master database url: %s", app_settings.master_db_url)
     master_engine = create_engine(app_settings.master_db_url)
     metadata.create_all(master_engine)
 
