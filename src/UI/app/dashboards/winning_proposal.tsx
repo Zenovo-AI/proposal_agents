@@ -107,7 +107,11 @@ function isValidDate(date: string | null): boolean {
   return !!date && !isNaN(Date.parse(date));
 }
 
-const WinningProposalPage = () => {
+type WinningProposalPageProps = {
+  onBack: () => void;
+};
+
+const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +293,9 @@ const WinningProposalPage = () => {
                   Export error: {exportError}
                 </p>
               )}
+              <div>
+                <button onClick={onBack}>Back</button>
+              </div>
             </article>
           );
         })}
