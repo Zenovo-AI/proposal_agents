@@ -15,7 +15,8 @@ way to access configuration values throughout the application.
 
 
 # Load .env file using:
-from dotenv import load_dotenv
+from urllib.parse import quote_plus
+from dotenv import load_dotenv # type: ignore
 load_dotenv()
 import os
 
@@ -43,5 +44,20 @@ class AppSettings:
     redirect_uri_1 = os.getenv("GOOGLE_REDIRECT_URI_1")
     redirect_uri_2 = os.getenv("GOOGLE_REDIRECT_URI_2")
     redirect_uri_3 = os.getenv("GOOGLE_REDIRECT_URI_3")
+    db_name = os.getenv("DB_NAME")
+    user = os.getenv("DB_USER")
+    password = os.getenv("DB_PASSWORD")
+    host = os.getenv("DB_HOST")
+    port_db = os.getenv("DB_PORT")
+    
+
+    @property
+    def master_db_url(self) -> str:
+        # URL-encode password to handle special characters like '@'
+        encoded_password = quote_plus(self.password) if self.password else ""
+        return (
+            f"postgresql://{self.user}:{encoded_password}@"
+            f"{self.host}:{self.port_db}/{self.db_name}"
+        )
 
 settings = AppSettings()

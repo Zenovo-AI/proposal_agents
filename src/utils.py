@@ -10,9 +10,9 @@ Text processing functions for cleaning and formatting content.
 - `format_response`: Splits and formats chatbot responses into readable sentences.
 """
 
-
 import ast
 import json
+import logging
 import re
 from datamodel import ProposalStructure
 from structure_agent.defined_proposal_strucutre import proposal_structure
@@ -126,6 +126,27 @@ def clean_text(text_content: str) -> str:
 
     return cleaned_text
 
+def sanitize_email(email: str) -> str:
+    """
+    Convert an email address into a safe PostgreSQL identifier string.
+    Replaces '@' and '.' with underscores and removes other invalid characters.
+    """
+    # Lowercase for consistency
+    sanitized = email.lower()
+    
+    # Replace '@' and '.' with underscores
+    sanitized = sanitized.replace('@', '_').replace('.', '_')
+    
+    # Remove any characters that are not letters, numbers, or underscores
+    sanitized = re.sub(r'[^a-z0-9_]', '', sanitized)
+    
+    # Ensure it doesn't start with a number (PostgreSQL identifiers can't start with digits)
+    if sanitized[0].isdigit():
+        sanitized = 'u_' + sanitized
+    
+    return sanitized
+
+
 def format_response(response):
     """
     Split response text into readable sentences and format for display.
@@ -138,6 +159,17 @@ def format_response(response):
     sentences = re.split(r'(?<=[.!?])\s+', response)
     formatted_response = '\n'.join(sentences)
     return formatted_response
+
+def parse_response_for_doc_ids(response):
+    """
+    Extracts doc_ids which can be filenames (e.g., mydoc.pdf) or URLs (e.g., https://...).
+    """
+    if isinstance(response, str):
+        # Match URLs or any string that looks like a filename (e.g. with .pdf, .docx, etc.)
+        urls = re.findall(r"https?://\S+", response)
+        files = re.findall(r"\b[\w\-]+(?:\.\w{2,5})\b", response)  # matches file-like strings
+        return list(set(urls + files))  # deduplicate
+    return []
 
 
 def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
@@ -210,7 +242,7 @@ def proposal_prompt(user_query: str) -> str:
     User Query:
     {user_query}
 
-    You are a senior-level technical writer for international engineering projects.
+    You are CDGA technical writer for international engineering projects.
 
     <context>
     When a user asks a question, take your time to understand the intent before writing a response.
@@ -331,6 +363,47 @@ def prompt_template():
 
     Please provide a detailed critique of the **Generated Proposal** based on the **Retrieved Proposal**.
     """
+
+def sql_expert_prompt() -> str:
+    """
+    Returns a detailed system prompt to instruct an LLM to act as an expert SQL agent
+    for RFQ search and retrieval from a PostgreSQL database.
+    """
+    return """
+    You are a highly skilled SQL analyst and data engineer tasked with helping users search a structured relational database of Request for Quotation (RFQ) documents.
+
+    Your role is mission-critical: the SQL queries you generate are directly used to retrieve important government and commercial RFQs that influence funding, project timelines, and strategic decisions.
+
+    Please follow these principles:
+
+    1. **Expertise**: Write fluent, optimized SQL for PostgreSQL.
+    2. **Precision**: The accuracy of your query is vital. Do not assume column names—only use columns that are documented or provided.
+    3. **Security**: Never write queries that could expose the system to SQL injection or data leakage. All inputs are sanitized.
+    4. **Relevance**: Focus queries on retrieving useful, meaningful results. Prioritize fields like:
+    - reference_no
+    - title
+    - submission_deadline
+    - country_or_region
+    - organization_name
+    - document_name or file_name
+    5. **Clarity**: Structure the query clearly, using aliases, ordering, and filtering where needed.
+    6. **User Intent**: Interpret the user's natural language query with precision, identifying keywords and mapping them to relevant fields.
+    7. **Fail-Safe**: If you are unsure of the schema, return a clarifying message or fallback query with minimal risk.
+
+    You are not generating dummy or illustrative queries — your SQL will be executed directly against live data. Accuracy and safety are non-negotiable.
+
+    Example User Input:
+    “Show me all RFQs from Nigeria that are still open and mention solar energy.”
+
+    Expected SQL Output:
+    SELECT reference_no, title, submission_deadline, country_or_region
+    FROM rfqs
+    WHERE country_or_region ILIKE '%Nigeria%'
+    AND submission_deadline >= CURRENT_DATE
+    AND rfq_title ILIKE '%solar%'
+    ORDER BY submission_deadline ASC;
+    """
+
 
 
 

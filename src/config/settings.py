@@ -13,7 +13,7 @@ offering a convenient way to access these project-wide constants across the appl
 """
 
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings # type: ignore
 
 
 class Settings(BaseSettings):

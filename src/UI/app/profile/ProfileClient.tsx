@@ -17,6 +17,8 @@ export default function ProfileClient() {
     const picture = searchParams.get("picture");
     const accessToken = searchParams.get("access_token");
     const refreshToken = searchParams.get("refresh_token");
+    const db_con_str = searchParams.get("tenant_db_con_str");
+    const working_dir = searchParams.get("working_dir");
 
     if (name && email && picture) {
       const userData = { name, email, picture };
@@ -29,6 +31,12 @@ export default function ProfileClient() {
 
       if (refreshToken) {
         localStorage.setItem("refresh_token", refreshToken);
+      }
+      if (db_con_str) {
+        localStorage.setItem("tenant_db_con_str", db_con_str);
+      }
+      if (working_dir) {
+        localStorage.setItem("working_dir", working_dir);
       }
 
       // Trigger animation on next tick

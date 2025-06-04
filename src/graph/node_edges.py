@@ -1,4 +1,4 @@
-from langgraph.checkpoint.memory import MemorySaver # type: ignore
+from langgraph.checkpoint.memory import InMemorySaver # type: ignore
 from langgraph.graph import END, StateGraph, START # type: ignore
 from reflexion_agent.state import State, Status
 
@@ -49,7 +49,7 @@ def create_state_graph(State, structure_node, generate_draft, retrieve_examples,
         }
     )
 
-    checkpointer = MemorySaver()
+    checkpointer = InMemorySaver()
 
     return builder.compile(checkpointer=checkpointer)
 

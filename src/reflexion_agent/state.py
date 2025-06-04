@@ -38,4 +38,5 @@ class State(TypedDict):
     iteration: int
     status: Status
     structure: Annotated[AIMessage, add_messages]
+    session_data: dict
 

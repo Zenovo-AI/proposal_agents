@@ -1,0 +1,22 @@
+export const messages = [
+  "Looking for the best RFQs? You're in the right place.",
+  "Stay ahead by checking recent RFQs daily.",
+  "Try searching by keyword, title, or organization.",
+  "We connect you with opportunities that matter.",
+  "Start typing to explore current RFQs!",
+  "Don't miss deadlines—check back often!",
+  "New opportunities are added regularly.",
+  "Stay informed. Stay competitive.",
+  "Explore RFQs tailored to your organization.",
+  "Smart search saves time. Use it now!",
+  "Your next big project starts here.",
+  "We help you discover what matters most.",
+  "Not sure what to search? Try a common term.",
+  "Your future contracts live here.",
+  "Let us simplify your sourcing process.",
+  "Filtered results = faster decisions.",
+  "Search. Bid. Win.",
+  "Get insights that help you act quickly.",
+  "Always updated, always relevant.",
+  "Welcome to your RFQ intelligence center."
+];

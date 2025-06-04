@@ -39,54 +39,117 @@ Note:
 
 import logging
 import asyncio
-import numpy as np
+import os
+import numpy as np # type: ignore
 from lightrag import LightRAG # type: ignore
+from lightrag.kg.postgres_impl import PostgreSQLDB  # type: ignore
 from lightrag.llm.openai import openai_embed, gpt_4o_complete # type: ignore
 from lightrag.utils import EmbeddingFunc # type: ignore
 from lightrag.kg.shared_storage import initialize_pipeline_status # type: ignore
 from config.appconfig import settings as app_settings
 
 # Embedding function using OpenAI
-def embedding_func(texts: list[str]) -> np.ndarray:
-    api_key = app_settings.openai_api_key
-    embeddings = openai_embed(
-        texts,
-        model="text-embedding-3-large",
-        api_key=api_key,
-        base_url = app_settings.openai_api_base
-    )
-    if embeddings is None:
-        logging.error("Received empty embeddings from API.")
-        return np.array([])
-    return embeddings
+# def embedding_func(texts: list[str]) -> np.ndarray:
+#     api_key = app_settings.openai_api_key
+#     embeddings = openai_embed(
+#         texts,
+#         model="text-embedding-3-large",
+#         api_key=api_key,
+#         base_url = app_settings.openai_api_base
+#     )
+#     if embeddings is None:
+#         logging.error("Received empty embeddings from API.")
+#         return np.array([])
+#     return embeddings
+
+# class RAGFactory:
+#     _shared_embedding = EmbeddingFunc(
+#         embedding_dim=3072,
+#         max_token_size=8192,
+#         func=embedding_func
+#     )
+
+#     @classmethod
+#     async def create_rag(cls, working_dir: str) -> LightRAG:
+#         """Create a LightRAG instance with shared configuration"""
+#         rag = LightRAG(
+#             working_dir=working_dir,
+#             addon_params={
+#                 "insert_batch_size": 10
+#             },
+#             llm_model_func=gpt_4o_complete,
+#             embedding_func=cls._shared_embedding
+#         )
+
+        # # Initialize storages and pipeline status (this must be async)
+        # # asyncio.run(cls._initialize_storage_and_pipeline(rag))
+        # await asyncio.create_task(cls._initialize_storage_and_pipeline(rag))
+
+#         return rag
+        
+        # @staticmethod
+        # async def _initialize_storage_and_pipeline(rag: LightRAG):
+        #   """Async init for storages and pipeline status"""
+        #   await rag.initialize_storages()
+        #   await initialize_pipeline_status()
+
 
 class RAGFactory:
-    _shared_embedding = EmbeddingFunc(
-        embedding_dim=3072,
-        max_token_size=8192,
-        func=embedding_func
-    )
-
     @classmethod
-    async def create_rag(cls, working_dir: str) -> LightRAG:
-        """Create a LightRAG instance with shared configuration"""
-        rag = LightRAG(
-            working_dir=working_dir,
-            addon_params={
-                "insert_batch_size": 10
-            },
-            llm_model_func=gpt_4o_complete,
-            embedding_func=cls._shared_embedding
+    async def create_rag(cls, config_path: str) -> LightRAG:
+        logging.info("🚀 Starting RAGFactory.create_rag")
+        # Load config from file
+        # config = configparser.ConfigParser()
+        db_config = {
+             "database": app_settings.db_name,
+              "user": app_settings.user,
+              "password": app_settings.password,
+              "host": app_settings.host,
+              "port": app_settings.port_db
+          }
+        print("✅ DB Config:", db_config)
+        logging.info("✅ DB Config: %s", db_config)
+
+        postgres_db = PostgreSQLDB(config=db_config)
+        await postgres_db.initdb()
+        await postgres_db.check_tables()
+
+        # Define embedding function
+        embedding_func = EmbeddingFunc(
+            embedding_dim=3072,
+            max_token_size=8192,
+            func=lambda texts: openai_embed(
+                texts,
+                model="text-embedding-3-large",
+                api_key=app_settings.openai_api_key,
+                base_url=app_settings.openai_api_base
+            )
         )
 
-        # Initialize storages and pipeline status (this must be async)
-        # asyncio.run(cls._initialize_storage_and_pipeline(rag))
-        await asyncio.create_task(cls._initialize_storage_and_pipeline(rag))
+        workspace_dir = app_settings.workspace
+        os.makedirs(workspace_dir, exist_ok=True)
+        print(f"✅ Working directory ensured at: {workspace_dir}")
+        logging.info("✅ Working directory ensured at: %s", workspace_dir)
+        print("⚙️ Initializing LightRAG with PostgreSQL storage...")
+        logging.info("⚙️ Initializing LightRAG with PostgreSQL storage...")
 
+        # Initialize LightRAG
+        rag = LightRAG(
+            working_dir=workspace_dir,
+            addon_params={"insert_batch_size": 10},
+            llm_model_func=gpt_4o_complete,
+            embedding_func=embedding_func,
+            kv_storage=app_settings.kv_storage,
+            vector_storage=app_settings.vector_storage,
+            graph_storage=app_settings.graph_storage,
+            doc_status_storage=app_settings.doc_status_storage,
+            db=postgres_db
+        )
+
+        await rag.initialize_storages()
+        print("✅ RAG storage initialized")
+        logging.info("✅ RAG storage initialized")
+        logging.info("✅ Finished initializing LightRAG")
         return rag
 
-    @staticmethod
-    async def _initialize_storage_and_pipeline(rag: LightRAG):
-        """Async init for storages and pipeline status"""
-        await rag.initialize_storages()
-        await initialize_pipeline_status()
+

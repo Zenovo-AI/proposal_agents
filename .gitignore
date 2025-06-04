@@ -168,6 +168,7 @@ analysis_workspace/
 
 data/
 files.db
+rfq_metadata.db
 
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.

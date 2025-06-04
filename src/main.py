@@ -13,27 +13,35 @@ Also configures middleware for CORS, security, and handles different modes (deve
 
 from datetime import datetime
 import json
+import requests # type: ignore
 import logging
 import traceback
 from urllib.parse import urlencode
+from sqlalchemy import create_engine# type: ignore
+import uuid
+from document_processor import DocumentProcessor
 from googleapiclient.discovery import build # type: ignore
 from google.oauth2.credentials import Credentials # type: ignore
 import httpx # type: ignore
 from google_doc_integration.google_docs_helper import GoogleDocsHelper
 from google_doc_integration.google_drive_helper import GoogleDriveAPI
+from rag_agent.rag_instance import RAGManager
 from reflexion_agent.human_feedback import human_node
 from graph.node_edges import control_edge, create_state_graph
 from reflexion_agent.critic import critic
 from reflexion_agent.retriever import retrieve_examples
 from reflexion_agent.state import State, Status
-from datamodel import RequestModel
+from datamodel import QueryRequest, RequestModel
 from rag_agent.inference import generate_draft
 from rag_agent.ingress import ingress_file_doc
+from database.db_helper import extract_proposal_metadata_llm, get_recent_activity, insert_document, open_tenant_db_connection, save_metadata_to_db, extract_metadata_with_llm, store_proposal_to_db
+from models.models import metadata
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_openai import OpenAI # type: ignore
-from db_helper import initialize_database
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status, HTTPException, UploadFile, File # type: ignore
+from fastapi import FastAPI, Request, status, HTTPException, UploadFile, File, Form, Depends # type: ignore
+from models.users_utilities import get_user_session, lookup_user_db_credentials
+from utils import sql_expert_prompt
 from structure_agent.structureAgent import structure_node
 import os, uvicorn # type: ignore
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
@@ -44,19 +52,29 @@ from itsdangerous import URLSafeTimedSerializer # type: ignore
 from starlette.config import Config # type: ignore
 from authlib.integrations.starlette_client import OAuth, OAuthError # type: ignore
 from fastapi.responses import JSONResponse, RedirectResponse # type: ignore
+from langchain_experimental.sql import SQLDatabaseChain #type: ignore
+from langchain_community.utilities import SQLDatabase # type: ignore
 from config.settings import get_setting
+from multi_tenant.onboard_user import onboard_user
 from config.appconfig import settings as app_settings
 from functools import partial
+import logging
 from langchain_openai import ChatOpenAI # type: ignore
 from fastapi.exceptions import RequestValidationError # type: ignore
 from fastapi.exception_handlers import request_validation_exception_handler # type: ignore
 
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 # Get application settings from the settings module
 settings = get_setting()
 # Description for API documentation
 description = f"""
 {settings.API_STR} helps you do awesome stuff. 🚀
 """
+
+master_engine = create_engine(app_settings.master_db_url)
+
 
 # Define a context manager for the application lifespan
 @asynccontextmanager
@@ -68,12 +86,11 @@ async def lifespan(app: FastAPI):
     # STARTUP Call Check routine
     print(running_mode)
     print()
-    
+    master_engine = create_engine(app_settings.master_db_url)
+    metadata.create_all(master_engine)
+
     # Configure OpenAI API
     OpenAI.api_key = app_settings.openai_api_key
-    
-    # Initialize database
-    initialize_database()
     
     print(" ⚡️🚀 RAG Server::Started")
     yield
@@ -103,7 +120,8 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 # Instantiate basicAuth
@@ -114,7 +132,7 @@ serializer = URLSafeTimedSerializer(app_settings.session_secret_key)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,  # 🔥 Necessary to allow cookies
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -125,22 +143,11 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=serializer.secret_key,
     session_cookie="session",
-    same_site="lax",         # or "none" if using HTTPS
-    https_only=False,        # ✅ False for local dev
+    same_site=None,         # or "none" if using HTTPS
+    https_only=True,        # ✅ False for local dev
 )
 
-
-
-# Get the directory of the current file
-base_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Define the auth cache directory
-auth_cache_dir = os.path.join(base_dir, "auth_cache")
-
-# Create full paths for the credentials and status file
-credentials_path = os.path.join(auth_cache_dir, "credentials.json")
-auth_status_path = os.path.join(auth_cache_dir, "auth_success.txt")
-state_path = os.path.join(auth_cache_dir, "oauth_state.txt")
+extract_metadata = DocumentProcessor()
 
 oauth = OAuth(Config(environ={
     'GOOGLE_CLIENT_ID': app_settings.client_id,
@@ -167,7 +174,7 @@ llm = ChatOpenAI(
 # Wrap the critic function to always pass in the LLM
 wrapped_critic = partial(critic, llm=llm)
 
-
+   
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     print("Validation error:", exc.errors())
@@ -175,14 +182,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.get("/login")
 async def login():
-    if app_settings.environment == "development":
-        redirect_uri = "http://localhost:8000/auth"
-    else:
-        redirect_uri = app_settings.redirect_uri_1  # Use production URI
+    # if app_settings.environment == "development":
+    # redirect_uri = "http://localhost:8000/auth"
+    # else:
+    #     redirect_uri = app_settings.redirect_uri_1  # Use production URI
 
     query_params = {
         "client_id": app_settings.client_id,
-        "redirect_uri": redirect_uri,
+        "redirect_uri": app_settings.redirect_uri_1,
         "response_type": "code",
         "scope": "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents",
         "access_type": "offline",
@@ -193,12 +200,54 @@ async def login():
 
 
 
+# @app.get("/auth")
+# async def auth(request: Request):
+#     code = request.query_params.get("code")
+#     if not code:
+#         raise HTTPException(status_code=400, detail="Missing authorization code")
+    
+#     data = {
+#         "code": code,
+#         "client_id": app_settings.client_id,
+#         "client_secret": app_settings.client_secret,
+#         "redirect_uri": app_settings.redirect_uri_1,
+#         "grant_type": "authorization_code",
+#     }
+
+#     async with httpx.AsyncClient() as client:
+#         response = await client.post(app_settings.google_token_endpoint, data=data)
+#         token_data = response.json()
+#         access_token = token_data.get("access_token")
+#         refresh_token = token_data.get("refresh_token")
+
+#         if not access_token:
+#             raise HTTPException(status_code=400, detail="Failed to obtain access token")
+        
+#         headers = {
+#             "Authorization": f"Bearer {access_token}",
+#         }
+#         userinfo_response = await client.get(app_settings.google_userinfo_endpoint, headers=headers)
+#         userinfo = userinfo_response.json()
+
+#         return RedirectResponse(
+#             f"{app_settings.redirect_uri_2}/profile"
+#             f"?name={userinfo['name']}"
+#             f"&email={userinfo['email']}"
+#             f"&picture={userinfo['picture']}"
+#             f"&access_token={access_token}"
+#             f"&refresh_token={refresh_token or ''}"
+#         )
+
+
+
+
 @app.get("/auth")
 async def auth(request: Request):
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code")
-    
+
+    # Exchange code for token
     data = {
         "code": code,
         "client_id": app_settings.client_id,
@@ -215,24 +264,68 @@ async def auth(request: Request):
 
         if not access_token:
             raise HTTPException(status_code=400, detail="Failed to obtain access token")
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-        }
+
+        # Fetch user info
+        headers = {"Authorization": f"Bearer {access_token}"}
         userinfo_response = await client.get(app_settings.google_userinfo_endpoint, headers=headers)
         userinfo = userinfo_response.json()
 
-        return RedirectResponse(
+        email = userinfo["email"]
+        name = userinfo["name"]
+        user = name.replace(" ", "_").lower()
+        picture = userinfo["picture"]
+
+        # Prepare connection info
+        pg_super_conn_info = {
+            "host": app_settings.host,
+            "port": app_settings.port_db,
+            "user": app_settings.user,
+            "password": app_settings.password
+        }
+
+        result = onboard_user(user, email, pg_super_conn_info, master_engine)
+        print("onboard_user result:", result)
+        # Onboard the user (create DB, working dir, and register in master DB)
+        tenant_username, tenant_db_name, tenant_db_conn_str, working_dir, user_password = onboard_user(user, email, pg_super_conn_info, master_engine)
+
+         # Serialize user DB info into cookie
+        session_data = {
+            "email": email,
+            "db_user": tenant_username,
+            "database_name": tenant_db_name,
+            "db_conn_str": tenant_db_conn_str,
+            "working_dir": working_dir,
+            "password": user_password
+        }
+
+        signed_data = serializer.dumps(session_data)
+        # token = request.cookies.get("session_token")
+
+
+        # Redirect to frontend (or success page)
+        response =  RedirectResponse(
             f"{app_settings.redirect_uri_2}/profile"
-            f"?name={userinfo['name']}"
-            f"&email={userinfo['email']}"
-            f"&picture={userinfo['picture']}"
+            f"?name={name}"
+            f"&email={email}"
+            f"&picture={picture}"
             f"&access_token={access_token}"
             f"&refresh_token={refresh_token or ''}"
         )
 
+        # Set user session cookie
+        response.set_cookie(
+            key="user_session",
+            value=signed_data,          # or signed_data if that's your token
+            httponly=True,
+            samesite="Lax",       # capitalized is fine, case-insensitive
+            secure=False          # False if localhost; True in production HTTPS
+        )
 
-@app.get("/logout")
+        return response
+    
+
+
+@app.get("/logout") 
 async def logout():
     # No server-side data to clear; just redirect to login page
     return RedirectResponse(url=app_settings.redirect_uri_3)
@@ -271,21 +364,133 @@ def index(response_class=JSONResponse):
 def health():
     return "healthy"
 
-@app.post("/ingress-file")
-async def uploadFile(file: UploadFile = File(...)):
-    try:
-        file_path = f"src/doc/{file.filename}"
-        with open(file_path, "wb") as f:
-            f.write(file.file.read())
-            # return {"message": "File saved successfully"}
-    except Exception as e:
-        return {"message": e.args}
-    return await ingress_file_doc(file.filename, file_path)
+# @app.post("/ingress-file")
+# async def uploadFile(file: UploadFile = File(...)):
+#     try:
+#         file_path = f"src/doc/{file.filename}"
+#         with open(file_path, "wb") as f:
+#             f.write(file.file.read())
+#             # return {"message": "File saved successfully"}
+#     except Exception as e:
+#         return {"message": e.args}
+#     return await ingress_file_doc(file.filename, file_path)
 
+# @app.post("/ingress-file")
+# async def uploadFile(
+#     file: UploadFile = File(None),  # Make file optional
+#     web_link: str = Form(None)  # Add web_link as an optional form field
+# ):
+#     try:
+#         if file:
+#             # Handle file upload
+#             file_path = f"src/doc/{file.filename}"
+#             with open(file_path, "wb") as f:
+#                 f.write(file.file.read())
+#             return await ingress_file_doc(file_name=file.filename, file_path=file_path)
+
+#         elif web_link:
+#             # Handle web link
+#             print(f"Processing web link: {web_link}")
+#             return await ingress_file_doc(file_name=web_link, web_links=[web_link])
+
+#         else:
+#             raise HTTPException(status_code=400, detail="No file or web link provided.")
+
+#     except Exception as e:
+#         logging.error("Error in /ingress-file:", exc_info=True)
+#         return {"message": str(e)}
+
+
+@app.post("/ingress-file")
+async def upload_file(
+    file: UploadFile = File(None),
+    web_link: str = Form(None),
+    session_data: dict = Depends(get_user_session)  # session_data contains decoded user info (e.g. email)
+):
+    try:
+        # Extract email from session data
+        email = session_data.get("email")
+        if not email:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+
+        # Lookup DB credentials once
+        db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
+
+        if file:
+            # Save uploaded file locally
+            file_path = os.path.join(working_dir, "doc", file.filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(await file.read())
+
+            # Extract metadata from PDF
+            text = extract_metadata.extract_text_from_pdf(file_path)
+            metadata = extract_metadata_with_llm(text)
+
+            document_name = file.filename
+            metadata.update({"id": document_name, "filename": file.filename})
+
+            # Insert document and metadata using fresh connections
+            insert_document(document_name, file.filename, text, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, db_user, db_name, db_password)
+
+            logging.info(f"✅ Inserted and saved metadata for document {document_name}")
+
+            logging.info("📥 Calling ingress_file_doc...")
+            return await ingress_file_doc(
+                file_name=file.filename,
+                file_path=file_path,
+                overwrite=True,
+                session_data=session_data
+            )
+
+        elif web_link:
+            # Download file from web link
+            response = requests.get(web_link)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to download file from web link.")
+
+            filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
+            file_path = os.path.join(working_dir, "doc", filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+
+            # Extract metadata from downloaded file
+            text = extract_metadata.extract_text_from_pdf(file_path)
+            metadata = extract_metadata_with_llm(text)
+
+            document_name = str(uuid.uuid4())
+            metadata.update({
+                "id": document_name,
+                "filename": filename,
+                "source": web_link
+            })
+
+            insert_document(document_name, file.filename, text, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, db_user, db_name, db_password)
+
+
+            logging.info(f"✅ Saved metadata for web link {web_link}")
+
+            logging.info("📥 Calling ingress_file_doc...")
+            return await ingress_file_doc(
+                file_name=web_link,
+                web_links=[web_link],
+                overwrite=True,
+                session_data=session_data
+            )
+
+        else:
+            raise HTTPException(status_code=400, detail="No file or web link provided.")
+
+    except Exception as e:
+        logging.error("Unhandled error in /ingress-file route", exc_info=True)
+        return {"message": f"An error occurred: {str(e)}"}
 
 
 @app.post("/retrieve")
-async def retrieve_query(requestModel: RequestModel):
+async def retrieve_query(requestModel: RequestModel, session_data: dict = Depends(get_user_session)):
     initial_state = {
         "user_query": requestModel.user_query,
         "candidate": None,
@@ -294,17 +499,25 @@ async def retrieve_query(requestModel: RequestModel):
         "critic_feedback": "",
         "status": Status.IN_PROGRESS,
         "iteration": 0,
+        "session_data": session_data,
     }
 
     try:
-        # Create graph
+                # Create graph
         graph = create_state_graph(
             State, structure_node, generate_draft, retrieve_examples, wrapped_critic, 
             human_node, control_edge
         )
         
         last_response = None
-        config = RunnableConfig(recursion_limit=10, configurable={"thread_id": "1"})
+        config = RunnableConfig(
+            recursion_limit=10,
+            configurable={
+                "thread_id": f"{session_data['email']}_thread1",
+                "session_data": session_data
+            }
+        )
+        
         interrupt_reached = False
 
         async for step in graph.astream(initial_state, config=config):
@@ -314,15 +527,11 @@ async def retrieve_query(requestModel: RequestModel):
             print(f"Current node: {node_id}")  # Debug print
 
             match node_id:
-                # case "draft":
-                #     last_response = value.get("candidate", {})
-                #     initial_state["candidate"] = last_response
-                #     continue
                 case "draft":
                     ai_message = value.get("candidate", {})
                     content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
                     last_response = content_str
-                    initial_state["candidate"] = content_str  # ✅ now it's JSON serializable
+                    initial_state["candidate"] = content_str 
                     continue
                     
                 case "retrieve":
@@ -379,7 +588,6 @@ async def retrieve_query(requestModel: RequestModel):
             content={"error": f"An error occurred: {str(e)}"},
             status_code=500
         )
-
 
 
 @app.post("/resume")
@@ -479,8 +687,120 @@ async def resume_graph(payload: dict):
         )
 
 
+
+# @app.get("/recent-rfqs")
+# def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
+#     email = session_data.get("email")
+#     if not email:
+#         raise HTTPException(status_code=401, detail="User not authenticated")
+
+#     # Lookup DB credentials once
+#     db_name, db_password, _, _ = lookup_user_db_credentials(email)
+#     conn = open_tenant_db_connection(db_name, db_password)
+#     try:
+#         cursor = conn.cursor()
+#         cursor.execute("""
+#             SELECT m.doc_id, m.organization_name, m.rfq_title, m.submission_deadline
+#             FROM rfqs m
+#             JOIN documents d ON m.doc_id = d.doc_id
+#             ORDER BY d.upload_time DESC
+            
+#         """)
+#         rows = cursor.fetchall()
+#         result = [
+#             {
+#                 "doc_id": row[0],
+#                 "organization": row[1],
+#                 "title": row[2],
+#                 "deadline": row[3].isoformat() if row[3] else None
+#             }
+#             for row in rows
+#         ]
+#         return {"rfqs": result}
+#     finally:
+#         conn.close()
+
+@app.get("/recent-rfqs")
+def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
+    logger.info("📥 Incoming request to /recent-rfqs")
+
+    email = session_data.get("email")
+    if not email:
+        logger.warning("❌ No email found in session data — user not authenticated")
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    logger.info(f"🔐 Session found for email: {email}")
+
+    try:
+        db_user, db_name,  db_password, _ = lookup_user_db_credentials(email)
+        logger.info(f" Password: {db_password}")
+        logger.info(f"✅ DB credentials resolved for email: {email} -> DB: {db_name}")
+    except Exception as e:
+        logger.exception("❌ Failed to lookup DB credentials")
+        raise HTTPException(status_code=500, detail="Error retrieving database credentials")
+
+    try:
+        conn = open_tenant_db_connection(db_user, db_name, db_password)
+        logger.info("🔗 DB connection established")
+    except Exception as e:
+        logger.exception("❌ Failed to connect to the tenant DB")
+        raise HTTPException(status_code=500, detail="Database connection error")
+
+    try:
+        cursor = conn.cursor()
+        logger.info("📄 Executing SQL query for recent RFQs")
+
+        cursor.execute("""
+            SELECT m.filename, m.organization_name, m.title, m.submission_deadline
+            FROM rfqs m
+            JOIN documents d ON m.filename = d.document_name
+            ORDER BY d.upload_time DESC
+        """)
+
+        rows = cursor.fetchall()
+        logger.info(f"📦 Retrieved {len(rows)} rows from the database")
+
+        result = [
+            {
+                "document_name": row[0],
+                "organization": row[1],
+                "title": row[2],
+                "deadline": row[3].isoformat() if row[3] else None
+            }
+            for row in rows
+        ]
+        logger.info("📄 RFQ Result: %s", result)
+        return {"rfqs": result}
+
+    except Exception as e:
+        logger.exception("❌ Error while querying or processing RFQs")
+        raise HTTPException(status_code=500, detail="Internal error retrieving RFQs")
+    finally:
+        conn.close()
+        logger.info("🔒 DB connection closed")
+
+
+@app.post("/search-rfqs")
+def search_rfqs(query_data: QueryRequest, session_data: dict = Depends(get_user_session)):
+    email = session_data.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    # Lookup DB credentials once
+    db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+    conn = open_tenant_db_connection(db_user, db_name, db_password)
+    try:
+        db = SQLDatabase(conn)
+        llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key, prompt=sql_expert_prompt())
+        db_chain = SQLDatabaseChain(llm=llm, database=db, verbose=True)
+        response = db_chain.run(query_data.query)
+        return {"results": response}
+    finally:
+        conn.close()
+
+
 @app.post("/save-to-drive")
-async def save_to_google_drive(payload: dict):
+async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_user_session)):
     try:
         print("Incoming payload:", payload)
         state = payload.get("state")
@@ -553,6 +873,31 @@ async def save_to_google_drive(payload: dict):
 
         view_link = docs_helper.generate_view_link(new_doc_id)
 
+        # === Extract metadata ===
+        metadata = await extract_proposal_metadata_llm(proposal_text)
+        logging.info("Proposal: %s", proposal_text)
+        title = metadata.get("title")
+        logging.info(f"Extracted title: {title}")
+        summary = metadata.get("summary")
+        logging.info(f"Extracted summary: {summary}")
+
+        # === Save to DB ===
+        email = session_data.get("email")
+        if not email:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+        # Lookup DB credentials once
+        db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+        rfq_id = payload.get("rfq_id") or "unknown"
+        try:
+            rfq_id = int(rfq_id) if rfq_id not in [None, "unknown", ""] else None
+        except ValueError:
+            rfq_id = None
+        is_winning = payload.get("is_winning", False)
+        
+
+        store_proposal_to_db(db_user, db_name, db_password, rfq_id, title, proposal_text, summary, is_winning)
+
+
         return JSONResponse(content={"message": "Upload successful", "view_link": view_link})
 
     except Exception as e:
@@ -562,6 +907,43 @@ async def save_to_google_drive(payload: dict):
             content={"error": str(e), "traceback": traceback.format_exc()}
         )
 
+@app.get("/recent-activity")
+def recent_activity(session_data: dict= Depends(get_user_session)):
+    email = session_data.get("email")
+    db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+    activity = get_recent_activity(db_user, db_name, db_password)
+
+    logging.info("Proposals returned: %s", activity.get("proposals", []))
+    return activity
+
+@app.get("/winning-proposals")
+def winning_proposals(session_data: dict = Depends(get_user_session)):
+    email = session_data.get("email")
+    db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+
+    conn = open_tenant_db_connection(db_user, db_name, db_password)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT proposal_id, proposal_title, proposal_content, created_at
+        FROM proposals
+        WHERE is_winning = TRUE
+        ORDER BY created_at DESC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    proposals = [
+        {
+            "proposal_id": str(row[0]),
+            "proposal_title": row[1],
+            "proposal_content": row[2],
+            "created_at": row[3].isoformat() if row[3] else None,
+        }
+        for row in rows
+    ]
+
+    return {"proposals": proposals}
 
         
         

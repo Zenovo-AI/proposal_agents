@@ -29,3 +29,6 @@ class ProposalStructure(TypedDict):
     lot_titles: List[str]
     attachments: bool
 
+class QueryRequest(BaseModel):
+    query: str
+

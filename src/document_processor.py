@@ -9,18 +9,25 @@ Functions:
 """
 
 
-from langchain.docstore.document import Document
-import trafilatura
+from langchain_core.documents.base import Document # type: ignore
+import trafilatura # type: ignore
 from utils import clean_text
 import logging
-import pdfplumber
+import pdfplumber #type: ignore
+import fitz #type: ignore
 
 logging.basicConfig(level=logging.INFO)
-
 
 class DocumentProcessor:
     def __init__(self):
         pass
+
+    def extract_text_from_pdf(self, filepath):
+        doc = fitz.open(filepath)
+        text = "\n".join([page.get_text() for page in doc])
+        doc.close()
+        return text[:10000]
+
 
     # Helper function to read text from a TXT file
     def extract_txt_content(self, file_path):

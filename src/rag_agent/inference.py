@@ -27,31 +27,78 @@ module provides a structured approach for handling file uploads and processing t
 application environment.
 """
 
-import json
-import ast
 from pathlib import Path
 import traceback
+
+from fastapi import HTTPException # type: ignore
+from rag_agent.rag_instance import RAGManager
 from cloud_storage.do_spaces import download_all_files
+from database.db_helper import fetch_metadata_from_db
 from rag_agent.lightrag_setup import RAGFactory
+from langchain_openai import OpenAI # type: ignore
+from config.appconfig import settings as app_settings
 from rag_agent.ingress import ingress_file_doc
 from lightrag import QueryParam # type: ignore
+from models.users_utilities import lookup_user_db_credentials
 from utils import clean_text, generate_explicit_query, proposal_prompt
 from langchain_core.messages import AIMessage # type: ignore
 from reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 
 
+
+# async def generate_draft(state: dict, config: dict) -> dict:
+#     user_query = state["user_query"]
+#     structure_proposal = state["structure"]
+
+#     feedback = state.get("human_feedback", ["No Feedback yet"])
+
+#     # Step 2: Expand query using structured context
+#     expanded_queries = generate_explicit_query(user_query, structure_proposal)
+#     print("[generate_draft] Expanded Queries:", expanded_queries)
+
+#     # Step 3: Build the full prompt
+#     if feedback:
+#         full_prompt = (
+#             f"{proposal_prompt(user_query)}\n\n"
+#             f"User Query: {expanded_queries}\n\n"
+#             f"Previous Feedback to Improve: {feedback}\n\n"
+#             f"Please incorporate this feedback into the proposal."
+#         )
+#     else:
+#         full_prompt = (
+#             f"{proposal_prompt(user_query)}\n\n"
+#             f"User Query: {expanded_queries}"
+#         )
+
+#     # Step 4: Run RAG
+#     working_dir = Path("./analysis_workspace")
+#     # download_all_files(working_dir)
+#     rag = await RAGFactory.create_rag(str(working_dir))
+#     rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
+#     cleaned_response = clean_text(rag_response)
+
+#     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
+
+#     # Step 5: Save result to state
+#     candidate_text = cleaned_response
+#     ai_msg = AIMessage(content=candidate_text)
+#     state["candidate"] = ai_msg
+#     state["messages"] = add_messages(state.get("messages", []), [ai_msg])
+
+#     return state
+
+
 async def generate_draft(state: dict, config: dict) -> dict:
     user_query = state["user_query"]
     structure_proposal = state["structure"]
-
     feedback = state.get("human_feedback", ["No Feedback yet"])
 
-    # Step 2: Expand query using structured context
+    # Step 1: Expand query using structured context
     expanded_queries = generate_explicit_query(user_query, structure_proposal)
     print("[generate_draft] Expanded Queries:", expanded_queries)
 
-    # Step 3: Build the full prompt
+    # Step 2: Build the full prompt
     if feedback:
         full_prompt = (
             f"{proposal_prompt(user_query)}\n\n"
@@ -65,22 +112,138 @@ async def generate_draft(state: dict, config: dict) -> dict:
             f"User Query: {expanded_queries}"
         )
 
-    # Step 4: Run RAG
-    working_dir = Path("./analysis_workspace")
-    download_all_files(working_dir)
-    rag = await RAGFactory.create_rag(str(working_dir))
-    rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
-    cleaned_response = clean_text(rag_response)
+    # Step 3: Create RAG instance using config file (PostgreSQL)
+    session_data = state.get("session_data")
+    if not session_data or "email" not in session_data:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    email = session_data.get("email")
+    print("[generate_draft] session_data received:", session_data)
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    # Lookup DB credentials once
+    db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
+    rag = await RAGManager.get_or_create_rag(db_user, db_name, db_password, working_dir)
+    rag.chunk_entity_relation_graph.embedding_func = rag.embedding_func
+
+    # Step 4: Run RAG query
+    # rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid",
+    #                                                         user_prompt=proposal_prompt(user_query),
+    #                                                         stream = True,
+    #                                                         conversation_history=[],
+    #                                                         history_turns=5))
+
+    
+    stream_gen = await rag.aquery(full_prompt, QueryParam(mode="hybrid",
+                                                            user_prompt=proposal_prompt(user_query),
+                                                            stream = True,
+                                                            conversation_history=[],
+                                                            history_turns=5))
+    # chunk can be a dict or string part, adjust accordingly
+    response_chunks = []
+    async for chunk in stream_gen:
+        if isinstance(chunk, dict) and "answer" in chunk:
+            response_chunks.append(chunk["answer"])
+        else:
+            response_chunks.append(str(chunk))
+
+    # Join all chunks into one string
+    full_response_text = "".join(response_chunks)
+    metadata = fetch_metadata_from_db(db_user, db_name, db_password)
+    # Step 5: Handle RAG response
+    if isinstance(full_response_text, dict) and "answer" in full_response_text:
+        cleaned_response = clean_text(full_response_text["answer"])
+        sources = []
+
+        # Extract source metadata from supporting documents
+        for doc in full_response_text.get("source_documents", []):
+            metadata = doc.get("metadata", {})
+            if "source" in metadata:
+                sources.append(metadata["source"])
+
+        unique_sources = list(set(sources))
+        cleaned_response += f"\n\nSources: {', '.join(unique_sources)}"
+    else:
+        cleaned_response = clean_text(full_response_text)
+        unique_sources = []
 
     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
 
-    # Step 5: Save result to state
+    # Step 6: Save result to state
     candidate_text = cleaned_response
     ai_msg = AIMessage(content=candidate_text)
     state["candidate"] = ai_msg
     state["messages"] = add_messages(state.get("messages", []), [ai_msg])
+    state["source_documents"] = unique_sources
 
     return state
+
+
+# async def generate_draft(state: dict, config: dict) -> dict:
+#     user_query = state["user_query"]
+#     structure_proposal = state["structure"]
+#     feedback = state.get("human_feedback", ["No Feedback yet"])
+
+#     # Step 1: Expand query using structured context
+#     expanded_queries = generate_explicit_query(user_query, structure_proposal)
+#     print("[generate_draft] Expanded Queries:", expanded_queries)
+
+#     # Step 2: Build the full prompt
+#     if feedback:
+#         full_prompt = (
+#             f"{proposal_prompt(user_query)}\n\n"
+#             f"User Query: {expanded_queries}\n\n"
+#             f"Previous Feedback to Improve: {feedback}\n\n"
+#             f"Please incorporate this feedback into the proposal."
+#         )
+#     else:
+#         full_prompt = (
+#             f"{proposal_prompt(user_query)}\n\n"
+#             f"User Query: {expanded_queries}"
+#         )
+
+#     # Step 3: Run RAG query
+#     working_dir = Path("./analysis_workspace")
+#     rag = await RAGFactory.create_rag(str(working_dir))
+
+#     # Assume rag.aquery returns a dict with 'answer' and 'source_documents'
+#     rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
+
+#     # Get the answer and source documents
+#     if isinstance(rag_response, dict) and "answer" in rag_response:
+#         cleaned_response = clean_text(rag_response["answer"])
+#         sources = []
+
+#         # Extract source metadata from supporting documents
+#         for doc in rag_response.get("source_documents", []):
+#             metadata = doc.get("metadata", {})
+#             if "source" in metadata:
+#                 sources.append(metadata["source"])
+
+#         # Ensure unique source list
+#         unique_sources = list(set(sources))
+
+#         # Optionally append sources to answer or store separately
+#         cleaned_response += f"\n\nSources: {', '.join(unique_sources)}"
+#     else:
+#         cleaned_response = clean_text(rag_response)
+#         unique_sources = []
+
+#     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
+
+#     # Step 4: Save result to state
+#     candidate_text = cleaned_response
+#     ai_msg = AIMessage(content=candidate_text)
+#     state["candidate"] = ai_msg
+#     state["messages"] = add_messages(state.get("messages", []), [ai_msg])
+
+#     # Save source metadata separately if needed
+#     state["source_documents"] = unique_sources
+
+#     return state
+
+
 
 
 
