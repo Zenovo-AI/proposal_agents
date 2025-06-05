@@ -215,7 +215,7 @@ def open_tenant_db_connection(db_user: str, db_name: str, db_password: str):
         dbname=db_name,
         password=db_password,
         host="localhost",
-        port="5433",
+        port="5432",
     )
     return conn
 

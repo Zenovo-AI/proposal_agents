@@ -100,11 +100,11 @@ const UploadPanel = ({ onBack }: UploadPanelProps) => {
     if (files.length === 0 && webLinks.length === 0) return
 
     const formData = new FormData()
-    files.forEach((file, index) => {
-      formData.append(`file_${index}`, file)
+    files.forEach((file) => {
+      formData.append("files", file) 
     })
-    webLinks.forEach((link, index) => {
-      formData.append(`web_link_${index}`, link)
+    webLinks.forEach((link) => {
+      formData.append("web_links", link)
     })
 
     setUploadStatus("⏳ Uploading files and web links...")

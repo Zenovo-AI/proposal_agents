@@ -44,11 +44,11 @@ class AppSettings:
     redirect_uri_1 = os.getenv("GOOGLE_REDIRECT_URI_1")
     redirect_uri_2 = os.getenv("GOOGLE_REDIRECT_URI_2")
     redirect_uri_3 = os.getenv("GOOGLE_REDIRECT_URI_3")
-    db_name = os.getenv("DB_NAME").strip()
-    user = os.getenv("DB_USER").strip()
-    password = os.getenv("DB_PASSWORD").strip()
-    host = os.getenv("DB_HOST").strip()
-    port_db = os.getenv("DB_PORT").strip()
+    db_name = os.getenv("DB_NAME")
+    user = os.getenv("DB_USER")
+    password = os.getenv("DB_PASSWORD")
+    host = os.getenv("DB_HOST")
+    port_db = os.getenv("DB_PORT")
     
 
     @property
@@ -59,5 +59,5 @@ class AppSettings:
             f"postgresql://{self.user}:{encoded_password}@"
             f"{self.host}:{self.port_db}/{self.db_name}"
         )
-
+    
 settings = AppSettings()

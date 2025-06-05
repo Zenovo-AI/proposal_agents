@@ -115,7 +115,6 @@ def create_tenant_database(user: str, db_name: str, pg_super_conn_info: dict, us
         cur.execute(
             sql.SQL("GRANT CONNECT ON DATABASE {} TO {};").format(sql.Identifier(db_name), sql.Identifier(user))
         )
-
         cur.close()
         conn.close()
 
