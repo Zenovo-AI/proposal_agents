@@ -13,7 +13,6 @@ Also configures middleware for CORS, security, and handles different modes (deve
 
 from datetime import datetime
 import json
-from typing import List
 import requests # type: ignore
 import logging
 import traceback
@@ -283,9 +282,6 @@ async def auth(request: Request):
             "password": app_settings.password
         }
 
-        # 🔍 DEBUG: Print PostgreSQL connection info
-        print("PostgreSQL Connection Info:", pg_super_conn_info)
-
         result = onboard_user(user, email, pg_super_conn_info, master_engine)
         print("onboard_user result:", result)
         # Onboard the user (create DB, working dir, and register in master DB)
@@ -406,92 +402,90 @@ def health():
 
 @app.post("/ingress-file")
 async def upload_file(
-    files: List[UploadFile] = File(None),
-    web_links: List[str] = Form(None),
-    session_data: dict = Depends(get_user_session)
+    file: UploadFile = File(None),
+    web_link: str = Form(None),
+    session_data: dict = Depends(get_user_session)  # session_data contains decoded user info (e.g. email)
 ):
     try:
+        # Extract email from session data
         email = session_data.get("email")
         if not email:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
+        # Lookup DB credentials once
         db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
 
-        results = []
+        if file:
+            # Save uploaded file locally
+            file_path = os.path.join(working_dir, "doc", file.filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(await file.read())
 
-        if files:
-            for file in files:
-                file_path = os.path.join(working_dir, "doc", file.filename)
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                with open(file_path, "wb") as f:
-                    f.write(await file.read())
+            # Extract metadata from PDF
+            text = extract_metadata.extract_text_from_pdf(file_path)
+            metadata = extract_metadata_with_llm(text)
 
-                text = extract_metadata.extract_text_from_pdf(file_path)
-                metadata = extract_metadata_with_llm(text)
+            document_name = file.filename
+            metadata.update({"id": document_name, "filename": file.filename})
 
-                document_name = file.filename
-                metadata.update({"id": document_name, "filename": file.filename})
+            # Insert document and metadata using fresh connections
+            insert_document(document_name, file.filename, text, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, db_user, db_name, db_password)
 
-                insert_document(document_name, file.filename, text, db_user, db_name, db_password)
-                save_metadata_to_db(metadata, db_user, db_name, db_password)
+            logging.info(f"✅ Inserted and saved metadata for document {document_name}")
 
-                logging.info(f"✅ Inserted and saved metadata for document {document_name}")
+            logging.info("📥 Calling ingress_file_doc...")
+            return await ingress_file_doc(
+                file_name=file.filename,
+                file_path=file_path,
+                overwrite=True,
+                session_data=session_data
+            )
 
-                logging.info("📥 Calling ingress_file_doc...")
-                result = await ingress_file_doc(
-                    file_name=file.filename,
-                    file_path=file_path,
-                    overwrite=True,
-                    session_data=session_data
-                )
-                results.append({file.filename: result})
+        elif web_link:
+            # Download file from web link
+            response = requests.get(web_link)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to download file from web link.")
 
-        elif web_links:
-            for link in web_links:
-                response = requests.get(link)
-                if response.status_code != 200:
-                    results.append({link: "❌ Failed to download"})
-                    continue
+            filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
+            file_path = os.path.join(working_dir, "doc", filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(response.content)
 
-                filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
-                file_path = os.path.join(working_dir, "doc", filename)
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                with open(file_path, "wb") as f:
-                    f.write(response.content)
+            # Extract metadata from downloaded file
+            text = extract_metadata.extract_text_from_pdf(file_path)
+            metadata = extract_metadata_with_llm(text)
 
-                text = extract_metadata.extract_text_from_pdf(file_path)
-                metadata = extract_metadata_with_llm(text)
+            document_name = str(uuid.uuid4())
+            metadata.update({
+                "id": document_name,
+                "filename": filename,
+                "source": web_link
+            })
 
-                document_name = str(uuid.uuid4())
-                metadata.update({
-                    "id": document_name,
-                    "filename": filename,
-                    "source": link
-                })
+            insert_document(document_name, file.filename, text, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, db_user, db_name, db_password)
 
-                insert_document(document_name, filename, text, db_user, db_name, db_password)
-                save_metadata_to_db(metadata, db_user, db_name, db_password)
 
-                logging.info(f"✅ Saved metadata for web link {link}")
+            logging.info(f"✅ Saved metadata for web link {web_link}")
 
-                logging.info("📥 Calling ingress_file_doc...")
-                result = await ingress_file_doc(
-                    file_name=link,
-                    web_links=[link],
-                    overwrite=True,
-                    session_data=session_data
-                )
-                results.append({link: result})
+            logging.info("📥 Calling ingress_file_doc...")
+            return await ingress_file_doc(
+                file_name=web_link,
+                web_links=[web_link],
+                overwrite=True,
+                session_data=session_data
+            )
 
         else:
             raise HTTPException(status_code=400, detail="No file or web link provided.")
 
-        return {"results": results}
-
     except Exception as e:
         logging.error("Unhandled error in /ingress-file route", exc_info=True)
         return {"message": f"An error occurred: {str(e)}"}
-
 
 
 @app.post("/retrieve")
