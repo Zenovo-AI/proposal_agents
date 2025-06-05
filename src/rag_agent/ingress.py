@@ -100,6 +100,7 @@ async def ingress_file_doc(file_name: str, file_path: str = None, web_links: lis
 
         # Lookup DB credentials once
         db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
+        logging.info("Password for user %s: %s", db_user, db_password, db_name)
         with open_tenant_db_connection(db_user,db_name, db_password) as conn:
             if not conn:
                 raise HTTPException(status_code=500, detail="Failed to connect to tenant database")
