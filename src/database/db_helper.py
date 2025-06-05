@@ -214,8 +214,8 @@ def open_tenant_db_connection(db_user: str, db_name: str, db_password: str):
         user=db_user,
         dbname=db_name,
         password=db_password,
-        host="161.35.119.194",
-        port="5432",
+        host=app_settings.host,
+        port=app_settings.port_db,
     )
     return conn
 
@@ -225,8 +225,8 @@ def initialize_age(db_user: str, db_name: str, db_password: str):
         user=db_user,
         dbname=db_name,
         password=db_password,
-        host="localhost",
-        port="5433",
+        host=app_settings.host,
+        port=app_settings.port_db,
     )
     cur = conn.cursor()
 
