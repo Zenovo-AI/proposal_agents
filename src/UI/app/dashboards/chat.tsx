@@ -407,7 +407,7 @@ const ChatPanel = ({ onBack }: ChatPanelProps) => {
               className="question-box"
               onChange={handleInputChange}
               value={input}
-              placeholder="Type your feedback or select a suggestion..."
+              placeholder="Please enter your feedback or type 'Approve' to approve proposal..."
               disabled={isLoading}
             />
             <button type="submit" disabled={isLoading}>

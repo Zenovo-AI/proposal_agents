@@ -77,6 +77,9 @@ class RAGManager:
             os.environ["POSTGRES_USER"] = db_user
             os.environ["POSTGRES_PASSWORD"] = db_pass
             os.environ["POSTGRES_DATABASE"] = db_name
+            os.environ["POSTGRES_HOST"] = app_settings.host
+            os.environ["POSTGRES_PORT"] = app_settings.port_db
+
 
             # Ensure AGE and ag_catalog are ready
             initialize_age(db_user, db_name, db_pass)

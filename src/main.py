@@ -120,7 +120,7 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
+    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app/"
 ]
 
 # Instantiate basicAuth
@@ -279,9 +279,11 @@ async def auth(request: Request):
             "host": app_settings.host,
             "port": app_settings.port_db,
             "user": app_settings.user,
+            "database": app_settings.db_name,
             "password": app_settings.password
         }
 
+        logging.info(("DEBUG: pg_super_conn_info = %s", pg_super_conn_info))
         result = onboard_user(user, email, pg_super_conn_info, master_engine)
         print("onboard_user result:", result)
         # Onboard the user (create DB, working dir, and register in master DB)
@@ -414,6 +416,7 @@ async def upload_file(
 
         # Lookup DB credentials once
         db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
+        logger.info("User, Database Name, Database Password: %s: %s: %s", db_user, db_name, db_password)
 
         if file:
             # Save uploaded file locally
@@ -427,7 +430,7 @@ async def upload_file(
             metadata = extract_metadata_with_llm(text)
 
             document_name = file.filename
-            metadata.update({"id": document_name, "filename": file.filename})
+            metadata.update({"id": document_name, "file_name": file.filename})
 
             # Insert document and metadata using fresh connections
             insert_document(document_name, file.filename, text, db_user, db_name, db_password)
@@ -462,7 +465,7 @@ async def upload_file(
             document_name = str(uuid.uuid4())
             metadata.update({
                 "id": document_name,
-                "filename": filename,
+                "file_name": filename,
                 "source": web_link
             })
 
@@ -750,9 +753,9 @@ def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
         logger.info("📄 Executing SQL query for recent RFQs")
 
         cursor.execute("""
-            SELECT m.filename, m.organization_name, m.title, m.submission_deadline
+            SELECT m.file_name, m.organization_name, m.title, m.submission_deadline
             FROM rfqs m
-            JOIN documents d ON m.filename = d.document_name
+            JOIN documents d ON m.file_name = d.document_name
             ORDER BY d.upload_time DESC
         """)
 

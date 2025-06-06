@@ -1,3 +1,4 @@
+import logging
 from models.models import users_table
 from sqlalchemy.dialects.postgresql import insert # type: ignore
 
@@ -34,6 +35,12 @@ def register_user(engine, db_user, email, db_conn_str, working_dir, db_password)
         password=db_password
     ).on_conflict_do_nothing(index_elements=['user'])
 
-    with engine.connect() as conn:
-        conn.execute(insert_stmt)
-        conn.commit()
+    try:
+        with engine.begin() as conn:
+            conn.execute(insert_stmt)
+            conn.commit()
+    except Exception as e:
+        logging.error(f"Error inserting user {email}: {e}")
+        raise
+    
+

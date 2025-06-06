@@ -251,7 +251,7 @@ def initialize_database(db_user: str, db_name: str, db_password: str):
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS documents (
-            document_names TEXT PRIMARY KEY,
+            document_name TEXT PRIMARY KEY,
             file_name TEXT UNIQUE,
             file_content TEXT,
             upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -374,7 +374,7 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
                 title,
                 submission_deadline,
                 country_or_region,
-                filename,
+                file_name,
                 contact_email
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -384,16 +384,16 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
                 title = EXCLUDED.title,
                 submission_deadline = EXCLUDED.submission_deadline,
                 country_or_region = EXCLUDED.country_or_region,
-                filename = EXCLUDED.filename,
+                file_name = EXCLUDED.file_name,
                 contact_email = EXCLUDED.contact_email;
         """, (
-            data.get("document_name") or data.get("id") or data.get("filename"),
+            data.get("document_name") or data.get("id") or data.get("file_name"),
             data.get("organization_name"),
             data.get("reference_no"),
             data.get("title"),
             data.get("submission_deadline"),
             data.get("country_or_region"),
-            data.get("filename"),
+            data.get("file_name"),
             data.get("contact_email"),
         ))
 
@@ -448,7 +448,7 @@ def fetch_metadata_from_db(db_user, db_name, db_password):
     try:
         cursor.execute("""
             SELECT rfq_id, document_name, organization_name, reference_no, title,
-                   submission_deadline, country_or_region, filename, contact_email
+                   submission_deadline, country_or_region, file_name, contact_email
             FROM rfqs
         """)
         rows = cursor.fetchall()
@@ -469,7 +469,7 @@ def fetch_metadata_from_db(db_user, db_name, db_password):
             "title": row[4],
             "submission_deadline": str(row[5]),
             "country_or_region": row[6],
-            "filename": row[7],
+            "file_name": row[7],
             "contact_email": row[8]
         })
 
