@@ -120,7 +120,7 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app/"
+    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
 ]
 
 # Instantiate basicAuth
