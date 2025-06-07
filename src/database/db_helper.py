@@ -262,7 +262,7 @@ def initialize_database(db_user: str, db_name: str, db_password: str):
         CREATE TABLE IF NOT EXISTS rfqs (
             rfq_id SERIAL PRIMARY KEY,
             document_name TEXT UNIQUE,
-            organisation_name TEXT,
+            organization_name TEXT,
             reference_no TEXT UNIQUE,
             title TEXT,
             submission_deadline DATE,
