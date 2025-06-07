@@ -185,6 +185,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 import traceback
+from typing import List
 import uuid
 import psycopg2 # type: ignore
 from psycopg2.extras import RealDictCursor # type: ignore
@@ -269,7 +270,8 @@ def initialize_database(db_user: str, db_name: str, db_password: str):
             country_or_region TEXT,
             file_name TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            contact_email TEXT
+            contact_email TEXT,
+            prompt_suggestions TEXT
         );
     """)
 
@@ -339,6 +341,67 @@ def extract_metadata_with_llm(text):
     return json.loads(response)
 
 
+# def extract_prompt_suggestions(text: str) -> List[str]:
+#     llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
+#     prompt = f"""
+#     You are an assistant that extracts useful Qestion suggestions from RFQs.
+#     Given the following RFQ text, generate 4 concise and relevant prompts to help guide proposal drafting.
+
+#     RFQ Content:
+#     {text}
+
+#     Respond only with a JSON array of strings.
+#     """
+#     response = llm.invoke(prompt)
+#     try:
+#         suggestions = json.loads(response)
+#         if isinstance(suggestions, list):
+#             return suggestions
+#         else:
+#             return []
+#     except json.JSONDecodeError:
+#         # fallback: return raw text split by lines or empty list
+#         return []
+
+
+def extract_prompt_suggestions(text: str) -> List[str]:
+    llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
+    prompt = f"""
+    You are an assistant that generates insightful prompt suggestions based on RFQ documents.
+
+    Your task is to read the RFQ content below and generate exactly 4 advanced, domain-relevant questions that someone might ask when preparing a technical or proposal response.
+
+    ⚠️ Strict Instructions:
+    - Format your response as a **valid JSON array of 4 strings**.
+    - Do NOT include any explanations, markdown, or extra text — just return the raw array.
+    - Example format:
+    [
+    "First question?",
+    "Second question?",
+    "Third question?",
+    "Fourth question?"
+    ]
+
+    RFQ Content:
+    {text}
+    """
+
+    response = llm.invoke(prompt)
+    logging.info("Prompt: %s", response)
+    try:
+        suggestions = json.loads(response)
+        if isinstance(suggestions, list):
+            return suggestions
+        else:
+            logging.warning(f"Prompt suggestions not a list: {response}")
+            return []
+    except json.JSONDecodeError:
+        logging.error(f"Failed to parse prompt suggestions: {response}")
+        return []
+
+
+
+
 def insert_document(document_name: str, file_name: str, file_content: str, db_user, db_name, db_password):
     conn = open_tenant_db_connection(db_user, db_name, db_password)
     cursor = conn.cursor()
@@ -360,7 +423,57 @@ def insert_document(document_name: str, file_name: str, file_content: str, db_us
 
 
 
-def save_metadata_to_db(data, db_user, db_name, db_password):
+# def save_metadata_to_db(data, db_user, db_name, db_password):
+#     conn = open_tenant_db_connection(db_user, db_name, db_password)
+#     logging.info("Connected to DB: %s", conn.dsn)
+#     cursor = conn.cursor()
+#     try:
+#         logging.info("Inserting metadata into rfqs: %s", data)
+#         cursor.execute("""
+#             INSERT INTO rfqs (
+#                 document_name,
+#                 organization_name,
+#                 reference_no,
+#                 title,
+#                 submission_deadline,
+#                 country_or_region,
+#                 file_name,
+#                 contact_email
+#             )
+#             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+#             ON CONFLICT (document_name) DO UPDATE SET
+#                 organization_name = EXCLUDED.organization_name,
+#                 reference_no = EXCLUDED.reference_no,
+#                 title = EXCLUDED.title,
+#                 submission_deadline = EXCLUDED.submission_deadline,
+#                 country_or_region = EXCLUDED.country_or_region,
+#                 file_name = EXCLUDED.file_name,
+#                 contact_email = EXCLUDED.contact_email;
+#         """, (
+#             data.get("document_name") or data.get("id") or data.get("file_name"),
+#             data.get("organization_name"),
+#             data.get("reference_no"),
+#             data.get("title"),
+#             data.get("submission_deadline"),
+#             data.get("country_or_region"),
+#             data.get("file_name"),
+#             data.get("contact_email"),
+#         ))
+
+#         conn.commit()
+#         logging.info(f"✅ RFQ metadata saved for {data.get('document_name')}")
+#     except Exception as e:
+#         logging.error("❌ Error saving RFQ metadata: %s\nData: %s", e, data)
+#         logging.error(traceback.format_exc())
+#     finally:
+#         cursor.close()
+#         conn.close()
+
+
+def save_metadata_to_db(data, prompt_suggestions, db_user, db_name, db_password):
+    prompt_suggestions_str = json.dumps(prompt_suggestions)
+    # logging.info("Prompt suggestions: %s", prompt_suggestions_str)
+
     conn = open_tenant_db_connection(db_user, db_name, db_password)
     logging.info("Connected to DB: %s", conn.dsn)
     cursor = conn.cursor()
@@ -375,9 +488,10 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
                 submission_deadline,
                 country_or_region,
                 file_name,
-                contact_email
+                contact_email,
+                prompt_suggestions
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (document_name) DO UPDATE SET
                 organization_name = EXCLUDED.organization_name,
                 reference_no = EXCLUDED.reference_no,
@@ -385,7 +499,8 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
                 submission_deadline = EXCLUDED.submission_deadline,
                 country_or_region = EXCLUDED.country_or_region,
                 file_name = EXCLUDED.file_name,
-                contact_email = EXCLUDED.contact_email;
+                contact_email = EXCLUDED.contact_email,
+                prompt_suggestions = EXCLUDED.prompt_suggestions;
         """, (
             data.get("document_name") or data.get("id") or data.get("file_name"),
             data.get("organization_name"),
@@ -395,6 +510,7 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
             data.get("country_or_region"),
             data.get("file_name"),
             data.get("contact_email"),
+            prompt_suggestions_str
         ))
 
         conn.commit()
@@ -405,40 +521,6 @@ def save_metadata_to_db(data, db_user, db_name, db_password):
     finally:
         cursor.close()
         conn.close()
-
-
-# def save_metadata_to_db(data):
-#     conn = get_pg_connection()
-#     logging.info("Connected to DB: %s", conn.dsn)
-#     cursor = conn.cursor()
-#     try:
-#         logging.info("Inserting metadata:", data)
-#         cursor.execute("""
-#             INSERT INTO metadata (doc_id, organization_name, rfq_number, rfq_title, submission_deadline, country_or_region, filename)
-#             VALUES (%s, %s, %s, %s, %s, %s, %s)
-#             ON CONFLICT (doc_id) DO UPDATE SET
-#               organization_name = EXCLUDED.organization_name,
-#               rfq_number = EXCLUDED.rfq_number,
-#               rfq_title = EXCLUDED.rfq_title,
-#               submission_deadline = EXCLUDED.submission_deadline,
-#               country_or_region = EXCLUDED.country_or_region,
-#               filename = EXCLUDED.filename;
-#         """, (
-#             data["id"],
-#             data["organization_name"],
-#             data["rfq_number"],
-#             data["rfq_title"],
-#             data["submission_deadline"],
-#             data["country_or_region"],
-#             data["filename"]
-#         ))
-#         conn.commit()
-#     except Exception as e:
-#         logging.info("❌ Error saving metadata: %s", e)
-#         logging.info("Data: %s", data)
-#     finally:
-#         cursor.close()
-#         conn.close()
 
 # ----------------- Retrieve metadata -----------------
 def fetch_metadata_from_db(db_user, db_name, db_password):

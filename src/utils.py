@@ -14,6 +14,7 @@ import ast
 import json
 import logging
 import re
+from typing import List
 from datamodel import ProposalStructure
 from structure_agent.defined_proposal_strucutre import proposal_structure
 from unstructured.cleaners.core import (
@@ -170,6 +171,7 @@ def parse_response_for_doc_ids(response):
         files = re.findall(r"\b[\w\-]+(?:\.\w{2,5})\b", response)  # matches file-like strings
         return list(set(urls + files))  # deduplicate
     return []
+
 
 
 def generate_explicit_query(query: str, structure: ProposalStructure) -> str:

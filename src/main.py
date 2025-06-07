@@ -13,6 +13,7 @@ Also configures middleware for CORS, security, and handles different modes (deve
 
 from datetime import datetime
 import json
+from typing import List
 import requests # type: ignore
 import logging
 import traceback
@@ -34,7 +35,7 @@ from reflexion_agent.state import State, Status
 from datamodel import QueryRequest, RequestModel
 from rag_agent.inference import generate_draft
 from rag_agent.ingress import ingress_file_doc
-from database.db_helper import extract_proposal_metadata_llm, get_recent_activity, insert_document, open_tenant_db_connection, save_metadata_to_db, extract_metadata_with_llm, store_proposal_to_db
+from database.db_helper import extract_prompt_suggestions, extract_proposal_metadata_llm, get_recent_activity, insert_document, open_tenant_db_connection, save_metadata_to_db, extract_metadata_with_llm, store_proposal_to_db
 from models.models import metadata
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_openai import OpenAI # type: ignore
@@ -181,11 +182,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.get("/login")
 async def login():
-    # if app_settings.environment == "development":
-    # redirect_uri = "http://localhost:8000/auth"
-    # else:
-    #     redirect_uri = app_settings.redirect_uri_1  # Use production URI
-
     query_params = {
         "client_id": app_settings.client_id,
         "redirect_uri": app_settings.redirect_uri_1,
@@ -196,47 +192,6 @@ async def login():
     }
     url = f"{app_settings.google_auth_endpoint}?{urlencode(query_params)}"
     return RedirectResponse(url)
-
-
-
-# @app.get("/auth")
-# async def auth(request: Request):
-#     code = request.query_params.get("code")
-#     if not code:
-#         raise HTTPException(status_code=400, detail="Missing authorization code")
-    
-#     data = {
-#         "code": code,
-#         "client_id": app_settings.client_id,
-#         "client_secret": app_settings.client_secret,
-#         "redirect_uri": app_settings.redirect_uri_1,
-#         "grant_type": "authorization_code",
-#     }
-
-#     async with httpx.AsyncClient() as client:
-#         response = await client.post(app_settings.google_token_endpoint, data=data)
-#         token_data = response.json()
-#         access_token = token_data.get("access_token")
-#         refresh_token = token_data.get("refresh_token")
-
-#         if not access_token:
-#             raise HTTPException(status_code=400, detail="Failed to obtain access token")
-        
-#         headers = {
-#             "Authorization": f"Bearer {access_token}",
-#         }
-#         userinfo_response = await client.get(app_settings.google_userinfo_endpoint, headers=headers)
-#         userinfo = userinfo_response.json()
-
-#         return RedirectResponse(
-#             f"{app_settings.redirect_uri_2}/profile"
-#             f"?name={userinfo['name']}"
-#             f"&email={userinfo['email']}"
-#             f"&picture={userinfo['picture']}"
-#             f"&access_token={access_token}"
-#             f"&refresh_token={refresh_token or ''}"
-#         )
-
 
 
 
@@ -365,92 +320,62 @@ def index(response_class=JSONResponse):
 def health():
     return "healthy"
 
-# @app.post("/ingress-file")
-# async def uploadFile(file: UploadFile = File(...)):
-#     try:
-#         file_path = f"src/doc/{file.filename}"
-#         with open(file_path, "wb") as f:
-#             f.write(file.file.read())
-#             # return {"message": "File saved successfully"}
-#     except Exception as e:
-#         return {"message": e.args}
-#     return await ingress_file_doc(file.filename, file_path)
-
-# @app.post("/ingress-file")
-# async def uploadFile(
-#     file: UploadFile = File(None),  # Make file optional
-#     web_link: str = Form(None)  # Add web_link as an optional form field
-# ):
-#     try:
-#         if file:
-#             # Handle file upload
-#             file_path = f"src/doc/{file.filename}"
-#             with open(file_path, "wb") as f:
-#                 f.write(file.file.read())
-#             return await ingress_file_doc(file_name=file.filename, file_path=file_path)
-
-#         elif web_link:
-#             # Handle web link
-#             print(f"Processing web link: {web_link}")
-#             return await ingress_file_doc(file_name=web_link, web_links=[web_link])
-
-#         else:
-#             raise HTTPException(status_code=400, detail="No file or web link provided.")
-
-#     except Exception as e:
-#         logging.error("Error in /ingress-file:", exc_info=True)
-#         return {"message": str(e)}
-
 
 @app.post("/ingress-file")
-async def upload_file(
-    file: UploadFile = File(None),
-    web_link: str = Form(None),
-    session_data: dict = Depends(get_user_session)  # session_data contains decoded user info (e.g. email)
+async def upload_files_and_links(
+    files: List[UploadFile] = File([]),
+    web_links: List[str] = Form([]),
+    session_data: dict = Depends(get_user_session)
 ):
     try:
-        # Extract email from session data
         email = session_data.get("email")
         if not email:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
-        # Lookup DB credentials once
         db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
         logger.info("User, Database Name, Database Password: %s: %s: %s", db_user, db_name, db_password)
 
-        if file:
-            # Save uploaded file locally
+        results = []
+
+        # Handle multiple file uploads
+        for file in files:
             file_path = os.path.join(working_dir, "doc", file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(await file.read())
 
-            # Extract metadata from PDF
             text = extract_metadata.extract_text_from_pdf(file_path)
             metadata = extract_metadata_with_llm(text)
+            prompt_suggestions = extract_prompt_suggestions(text)
+            logging.info("Suggested Prompts: %s", prompt_suggestions)
 
             document_name = file.filename
             metadata.update({"id": document_name, "file_name": file.filename})
 
-            # Insert document and metadata using fresh connections
             insert_document(document_name, file.filename, text, db_user, db_name, db_password)
-            save_metadata_to_db(metadata, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, prompt_suggestions, db_user, db_name, db_password)
 
             logging.info(f"✅ Inserted and saved metadata for document {document_name}")
-
             logging.info("📥 Calling ingress_file_doc...")
-            return await ingress_file_doc(
+
+            result = await ingress_file_doc(
                 file_name=file.filename,
                 file_path=file_path,
                 overwrite=True,
                 session_data=session_data
             )
+            results.append(result)
 
-        elif web_link:
-            # Download file from web link
-            response = requests.get(web_link)
+        # Handle multiple web links
+        for link in web_links:
+            link = link.strip()
+            if not link:
+                continue
+
+            response = requests.get(link)
             if response.status_code != 200:
-                raise HTTPException(status_code=400, detail="Failed to download file from web link.")
+                logging.warning(f"❌ Failed to fetch {link}")
+                continue
 
             filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
             file_path = os.path.join(working_dir, "doc", filename)
@@ -458,33 +383,36 @@ async def upload_file(
             with open(file_path, "wb") as f:
                 f.write(response.content)
 
-            # Extract metadata from downloaded file
             text = extract_metadata.extract_text_from_pdf(file_path)
             metadata = extract_metadata_with_llm(text)
+            prompt_suggestions = extract_prompt_suggestions(text)
+            logging.info("Suggested Prompts: %s", prompt_suggestions)
 
             document_name = str(uuid.uuid4())
             metadata.update({
                 "id": document_name,
                 "file_name": filename,
-                "source": web_link
+                "source": link
             })
 
-            insert_document(document_name, file.filename, text, db_user, db_name, db_password)
-            save_metadata_to_db(metadata, db_user, db_name, db_password)
+            insert_document(document_name, filename, text, db_user, db_name, db_password)
+            save_metadata_to_db(metadata, prompt_suggestions, db_user, db_name, db_password)
 
-
-            logging.info(f"✅ Saved metadata for web link {web_link}")
-
+            logging.info(f"✅ Saved metadata for web link {link}")
             logging.info("📥 Calling ingress_file_doc...")
-            return await ingress_file_doc(
-                file_name=web_link,
-                web_links=[web_link],
+
+            result = await ingress_file_doc(
+                file_name=link,
+                web_links=[link],
                 overwrite=True,
                 session_data=session_data
             )
+            results.append(result)
 
-        else:
-            raise HTTPException(status_code=400, detail="No file or web link provided.")
+        if not results:
+            raise HTTPException(status_code=400, detail="No valid files or web links processed.")
+
+        return {"message": "Upload completed.", "details": results}
 
     except Exception as e:
         logging.error("Unhandled error in /ingress-file route", exc_info=True)
@@ -689,39 +617,6 @@ async def resume_graph(payload: dict):
         )
 
 
-
-# @app.get("/recent-rfqs")
-# def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
-#     email = session_data.get("email")
-#     if not email:
-#         raise HTTPException(status_code=401, detail="User not authenticated")
-
-#     # Lookup DB credentials once
-#     db_name, db_password, _, _ = lookup_user_db_credentials(email)
-#     conn = open_tenant_db_connection(db_name, db_password)
-#     try:
-#         cursor = conn.cursor()
-#         cursor.execute("""
-#             SELECT m.doc_id, m.organization_name, m.rfq_title, m.submission_deadline
-#             FROM rfqs m
-#             JOIN documents d ON m.doc_id = d.doc_id
-#             ORDER BY d.upload_time DESC
-            
-#         """)
-#         rows = cursor.fetchall()
-#         result = [
-#             {
-#                 "doc_id": row[0],
-#                 "organization": row[1],
-#                 "title": row[2],
-#                 "deadline": row[3].isoformat() if row[3] else None
-#             }
-#             for row in rows
-#         ]
-#         return {"rfqs": result}
-#     finally:
-#         conn.close()
-
 @app.get("/recent-rfqs")
 def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
     logger.info("📥 Incoming request to /recent-rfqs")
@@ -908,6 +803,40 @@ async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_u
             status_code=500,
             content={"error": str(e), "traceback": traceback.format_exc()}
         )
+
+
+@app.get("/prompt-suggestions")
+async def get_prompt_suggestions(session_data: dict = Depends(get_user_session)):
+    email = session_data.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+    conn = open_tenant_db_connection(db_user, db_name, db_password)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT prompt_suggestions FROM rfqs
+        ORDER BY created_at DESC
+        LIMIT 1
+    """)
+    result = cursor.fetchone()
+    conn.close()
+
+    if not result or not result[0]:
+        logging.info("Prompts: %s", result)
+        return {"prompts": []}
+
+    try:
+        # 👇 double parse due to double encoding
+        parsed = json.loads(result[0])
+        if isinstance(parsed, str):
+            parsed = json.loads(parsed)
+        return {"prompts": parsed}
+    except Exception as e:
+        logging.error("Failed to parse prompt suggestions: %s", e)
+        return {"prompts": []}
+
 
 @app.get("/recent-activity")
 def recent_activity(session_data: dict= Depends(get_user_session)):

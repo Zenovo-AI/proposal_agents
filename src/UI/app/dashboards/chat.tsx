@@ -411,7 +411,7 @@ const ChatPanel = ({ onBack }: ChatPanelProps) => {
               disabled={isLoading}
             />
             <button type="submit" disabled={isLoading}>
-              Send Feedback
+              Changes needed
             </button>
             <TypeaheadPrompts
               input={input}
