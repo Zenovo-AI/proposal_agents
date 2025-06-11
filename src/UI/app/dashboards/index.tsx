@@ -157,10 +157,11 @@ export default function DocumentDashboardPage() {
     if (rfqId) params.set("rfq", rfqId);
     if (chatMode) params.set("chat_mode", chatMode);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [mode, rfqId, chatMode]);
+  }, [mode, rfqId, chatMode, router, pathname, searchParams]);
 
   if (loading) return <p>Loading...</p>;
   if (!authenticatedUser) return <LoginPage notice={null} />;
+
 
   return (
     <main>
@@ -204,7 +205,7 @@ export default function DocumentDashboardPage() {
 
       {!mode && (
         <div className="mode-selector">
-          <p>{"Welcome to CDGA's Proposal Agent. I'm your virtual assistant, here to help you craft top-tier proposals rooted in CDGA's 25+ years of international engineering and consultancy experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I've got you covered. What do you like to do:"}</p>
+          <p>{"Welcome to CDGA's Proposal Agent. I'm your virtual assistant, here to help you craft top-tier proposals rooted in CDGA's 25+ years of international engineering and consultancy experience. Whether you're preparing documentation for CTBTO or drafting a bid for a global energy client, I've got you covered. What would you like to do:"}</p>
           <div className="buttons">
             <button onClick={() => setMode("upload")}>📄 Upload Document</button>
             <button onClick={() => setMode("chat")}>💬 Draft Proposal</button>

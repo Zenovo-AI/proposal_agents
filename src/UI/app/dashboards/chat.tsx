@@ -47,7 +47,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
     const params = new URLSearchParams(searchParams.toString())
     params.set("mode", mode)
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [mode])
+  }, [mode, router, pathname, searchParams])
 
   const queryUrl = `https://proposal-generator-app-b2pah.ondigitalocean.app/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
   console.log("💡 Effective RFQ ID:", effectiveRfqId);
@@ -114,7 +114,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
         {noMessages ? (
           <>
             <p className="starter-text">
-              Welcome to CDGA's Proposal Assistant. I'm here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work.
+             {"Welcome to CDGA's Proposal Assistant. I'm here to help you draft professional, standards-aligned proposals tailored to international engineering and consultancy work."}
             </p>
             <PromptSuggestionsRow onPromptClick={handlePrompt} rfqId={effectiveRfqId} />
           </>
