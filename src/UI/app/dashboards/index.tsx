@@ -118,7 +118,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Artboard_3 from "../assets/Artboard_3.png";
 import LoginPage from "../authentication/loginPage";
 import UploadPanel from "./upload";
-import ChatPanel from "./chat";
+import ChatPanelWithSuspense from "./ChatPanelWithSuspense";
 import UploadsPage from "./view";
 import WinningProposalPage from "./winning_proposal";
 import { useAuth } from "../authentication/useAuth";
@@ -229,7 +229,7 @@ export default function DocumentDashboardPage() {
       )}
 
       {mode === "chat" && (
-        <ChatPanel
+        <ChatPanelWithSuspense
           user={authenticatedUser}
           rfqId={rfqId ?? undefined}
           chatMode={chatMode}
@@ -241,7 +241,6 @@ export default function DocumentDashboardPage() {
           }}
         />
       )}
-
 
       {mode === "winning_proposal" && (
         <WinningProposalPage onBack={() => setMode(null)} />
