@@ -27,6 +27,7 @@ module provides a structured approach for handling file uploads and processing t
 application environment.
 """
 
+import logging
 from pathlib import Path
 import traceback
 
@@ -46,51 +47,13 @@ from reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 
 
-
-# async def generate_draft(state: dict, config: dict) -> dict:
-#     user_query = state["user_query"]
-#     structure_proposal = state["structure"]
-
-#     feedback = state.get("human_feedback", ["No Feedback yet"])
-
-#     # Step 2: Expand query using structured context
-#     expanded_queries = generate_explicit_query(user_query, structure_proposal)
-#     print("[generate_draft] Expanded Queries:", expanded_queries)
-
-#     # Step 3: Build the full prompt
-#     if feedback:
-#         full_prompt = (
-#             f"{proposal_prompt(user_query)}\n\n"
-#             f"User Query: {expanded_queries}\n\n"
-#             f"Previous Feedback to Improve: {feedback}\n\n"
-#             f"Please incorporate this feedback into the proposal."
-#         )
-#     else:
-#         full_prompt = (
-#             f"{proposal_prompt(user_query)}\n\n"
-#             f"User Query: {expanded_queries}"
-#         )
-
-#     # Step 4: Run RAG
-#     working_dir = Path("./analysis_workspace")
-#     # download_all_files(working_dir)
-#     rag = await RAGFactory.create_rag(str(working_dir))
-#     rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid"))
-#     cleaned_response = clean_text(rag_response)
-
-#     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
-
-#     # Step 5: Save result to state
-#     candidate_text = cleaned_response
-#     ai_msg = AIMessage(content=candidate_text)
-#     state["candidate"] = ai_msg
-#     state["messages"] = add_messages(state.get("messages", []), [ai_msg])
-
-#     return state
-
-
 async def generate_draft(state: dict, config: dict) -> dict:
     user_query = state["user_query"]
+    rfq_id = state["rfq_id"]
+    logging.info("RFQ file %s", rfq_id)
+    mode = state["mode"]
+    logging.info("Mode selected %s", mode)
+    
     structure_proposal = state["structure"]
     feedback = state.get("human_feedback", ["No Feedback yet"])
 
@@ -126,20 +89,14 @@ async def generate_draft(state: dict, config: dict) -> dict:
     db_user, db_name, db_password, working_dir = lookup_user_db_credentials(email)
     rag = await RAGManager.get_or_create_rag(db_user, db_name, db_password, working_dir)
     rag.chunk_entity_relation_graph.embedding_func = rag.embedding_func
+    param = QueryParam(mode=mode,
+                       ids=[rfq_id] if mode == "local" and rfq_id else None,
+                       user_prompt=proposal_prompt(user_query),
+                       stream = True,
+                       conversation_history=[],
+                       history_turns=5)
 
-    # Step 4: Run RAG query
-    # rag_response = await rag.aquery(full_prompt, QueryParam(mode="hybrid",
-    #                                                         user_prompt=proposal_prompt(user_query),
-    #                                                         stream = True,
-    #                                                         conversation_history=[],
-    #                                                         history_turns=5))
-
-    
-    stream_gen = await rag.aquery(full_prompt, QueryParam(mode="hybrid",
-                                                            user_prompt=proposal_prompt(user_query),
-                                                            stream = True,
-                                                            conversation_history=[],
-                                                            history_turns=5))
+    stream_gen = await rag.aquery(full_prompt, param)
     # chunk can be a dict or string part, adjust accordingly
     response_chunks = []
     async for chunk in stream_gen:

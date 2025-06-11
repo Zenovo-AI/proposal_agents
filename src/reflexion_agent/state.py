@@ -37,6 +37,8 @@ class State(TypedDict):
     human_feedback: Annotated[List[str], add_messages]
     iteration: int
     status: Status
+    rfq_id: str
+    mode: str
     structure: Annotated[AIMessage, add_messages]
     session_data: dict
 

@@ -281,7 +281,7 @@ interface ProposalResponse {
   state?: State;
 }
 
-export function useCustomChat(apiUrl: string) {
+export function useCustomChat(apiUrl: string, selectedRfq: string, mode: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -322,7 +322,11 @@ export function useCustomChat(apiUrl: string) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ user_query: content }),
+        body: JSON.stringify({ 
+          user_query: content,
+          rfq_id: selectedRfq,
+          mode: mode
+         }),
       });
 
       if (!response.ok) throw new Error(`Server error: ${response.status}`);

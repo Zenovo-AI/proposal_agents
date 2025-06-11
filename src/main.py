@@ -32,7 +32,7 @@ from graph.node_edges import control_edge, create_state_graph
 from reflexion_agent.critic import critic
 from reflexion_agent.retriever import retrieve_examples
 from reflexion_agent.state import State, Status
-from datamodel import QueryRequest, RequestModel
+from datamodel import PromptRequest, QueryRequest, RequestModel
 from rag_agent.inference import generate_draft
 from rag_agent.ingress import ingress_file_doc
 from database.db_helper import extract_prompt_suggestions, extract_proposal_metadata_llm, get_recent_activity, insert_document, open_tenant_db_connection, save_metadata_to_db, extract_metadata_with_llm, store_proposal_to_db
@@ -40,7 +40,7 @@ from models.models import metadata
 from langchain_core.runnables import RunnableConfig # type: ignore
 from langchain_openai import OpenAI # type: ignore
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status, HTTPException, UploadFile, File, Form, Depends # type: ignore
+from fastapi import FastAPI, Query, Request, status, HTTPException, UploadFile, File, Form, Depends # type: ignore
 from models.users_utilities import get_user_session, lookup_user_db_credentials
 from utils import sql_expert_prompt
 from structure_agent.structureAgent import structure_node
@@ -113,7 +113,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 # Configure for development or production mode
-if app_settings.environment in ["development", "staging"]:
+if app_settings.environment in ["production", "staging"]:
     running_mode = f"  👩‍💻 🛠️  Running in::{app_settings.environment} mode"
 else:
     app.add_middleware(HTTPSRedirectMiddleware)
@@ -339,7 +339,7 @@ async def upload_files_and_links(
 
         # Handle multiple file uploads
         for file in files:
-            file_path = os.path.join(working_dir, "doc", file.filename)
+            file_path = os.path.join(working_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(await file.read())
@@ -378,7 +378,7 @@ async def upload_files_and_links(
                 continue
 
             filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
-            file_path = os.path.join(working_dir, "doc", filename)
+            file_path = os.path.join(working_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(response.content)
@@ -421,6 +421,7 @@ async def upload_files_and_links(
 
 @app.post("/retrieve")
 async def retrieve_query(requestModel: RequestModel, session_data: dict = Depends(get_user_session)):
+    print("Received data:", requestModel.model_dump())
     initial_state = {
         "user_query": requestModel.user_query,
         "candidate": None,
@@ -428,6 +429,8 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
         "human_feedback": [],
         "critic_feedback": "",
         "status": Status.IN_PROGRESS,
+        "rfq_id": requestModel.rfq_id,
+        "mode": requestModel.mode,
         "iteration": 0,
         "session_data": session_data,
     }
@@ -444,7 +447,7 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
             recursion_limit=10,
             configurable={
                 "thread_id": f"{session_data['email']}_thread1",
-                "session_data": session_data
+                "session_data": session_data,
             }
         )
         
@@ -525,6 +528,7 @@ async def resume_graph(payload: dict):
     try:
         state_data = payload["state"]
         feedback = payload.get("feedback", "").lower()
+        print("incoming payload", payload)
 
         raw_status = state_data.get("status", "in_progress").lower()
         current_status = Status(raw_status) if raw_status in Status._value2member_map_ else Status.IN_PROGRESS
@@ -805,37 +809,83 @@ async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_u
         )
 
 
-@app.get("/prompt-suggestions")
-async def get_prompt_suggestions(session_data: dict = Depends(get_user_session)):
+# @app.get("/prompt-suggestions")
+# async def get_prompt_suggestions(session_data: dict = Depends(get_user_session)):
+#     email = session_data.get("email")
+#     if not email:
+#         raise HTTPException(status_code=401, detail="User not authenticated")
+    
+#     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
+#     conn = open_tenant_db_connection(db_user, db_name, db_password)
+#     cursor = conn.cursor()
+
+#     cursor.execute("""
+#         SELECT prompt_suggestions FROM rfqs
+#         ORDER BY created_at DESC
+#         LIMIT 1
+#     """)
+#     result = cursor.fetchone()
+#     conn.close()
+
+#     if not result or not result[0]:
+#         logging.info("Prompts: %s", result)
+#         return {"prompts": []}
+
+#     try:
+#         # 👇 double parse due to double encoding
+#         parsed = json.loads(result[0])
+#         if isinstance(parsed, str):
+#             parsed = json.loads(parsed)
+#         return {"prompts": parsed}
+#     except Exception as e:
+#         logging.error("Failed to parse prompt suggestions: %s", e)
+#         return {"prompts": []}
+
+@app.post("/prompt-suggestions")
+async def get_prompt_suggestions(
+    payload: PromptRequest,
+    session_data: dict = Depends(get_user_session)
+):
+    print("Received data:", payload)
+    rfq_id = payload.rfq_id
+
     email = session_data.get("email")
     if not email:
         raise HTTPException(status_code=401, detail="User not authenticated")
-    
+
     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
     conn = open_tenant_db_connection(db_user, db_name, db_password)
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT prompt_suggestions FROM rfqs
-        ORDER BY created_at DESC
-        LIMIT 1
-    """)
+    if rfq_id:
+        logging.info("Selected RFQ: %s", rfq_id)
+        cursor.execute(
+            "SELECT prompt_suggestions FROM rfqs WHERE document_name = %s",
+            (rfq_id,)
+        )
+    else:
+        cursor.execute("""
+            SELECT prompt_suggestions
+            FROM rfqs
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+
     result = cursor.fetchone()
     conn.close()
 
     if not result or not result[0]:
-        logging.info("Prompts: %s", result)
         return {"prompts": []}
 
     try:
-        # 👇 double parse due to double encoding
-        parsed = json.loads(result[0])
-        if isinstance(parsed, str):
-            parsed = json.loads(parsed)
-        return {"prompts": parsed}
+        prompts = json.loads(result[0])
+        if isinstance(prompts, str):
+            prompts = json.loads(prompts)
+        return {"prompts": prompts}
     except Exception as e:
         logging.error("Failed to parse prompt suggestions: %s", e)
         return {"prompts": []}
+
 
 
 @app.get("/recent-activity")

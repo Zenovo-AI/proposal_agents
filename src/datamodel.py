@@ -8,12 +8,14 @@ This model ensures structured validation of incoming data for querying specific 
 """
 
 
-from typing import List, Literal, TypedDict
+from typing import List, Literal, Optional, TypedDict
 from pydantic import BaseModel, Field # type: ignore
 from enum import Enum
 
 class RequestModel(BaseModel):
     user_query:str
+    rfq_id: str
+    mode: str
     chat_history: str = Field(default=None, description="chat history for the user query")
     feedback: str | None = None
 
@@ -32,3 +34,5 @@ class ProposalStructure(TypedDict):
 class QueryRequest(BaseModel):
     query: str
 
+class PromptRequest(BaseModel):
+    rfq_id: Optional[str] = None
