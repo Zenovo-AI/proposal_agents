@@ -180,7 +180,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     print("Validation error:", exc.errors())
     return await request_validation_exception_handler(request, exc)
 
-@app.get("/login")
+@app.get("/api/login")
 async def login():
     query_params = {
         "client_id": app_settings.client_id,
@@ -195,7 +195,7 @@ async def login():
 
 
 
-@app.get("/auth")
+@app.get("/api/auth")
 async def auth(request: Request):
     code = request.query_params.get("code")
     if not code:
@@ -305,7 +305,7 @@ async def me(request: Request):
 
 
 # Define a health check endpoint
-@app.get("/", status_code=status.HTTP_200_OK)
+@app.get("/api/", status_code=status.HTTP_200_OK)
 def index(response_class=JSONResponse):
     return {
         "ApplicationName": "Proposal Generator Agent", 
