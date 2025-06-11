@@ -1,3 +1,5 @@
-import DocumentDashboardPage from "../app/dashboards/index";
+import IndexWithSuspense from "../app/dashboards/IndexWithSuspense";
 
-export default DocumentDashboardPage;
+export default function Page() {
+  return <IndexWithSuspense />;
+}
