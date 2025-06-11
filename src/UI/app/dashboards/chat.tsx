@@ -18,7 +18,7 @@ type User = {
   picture: string
 }
 
-type ChatPanelProps = {
+export type ChatPanelProps = {
   user?: User;
   onBack: () => void;
   rfqId?: string | null;
