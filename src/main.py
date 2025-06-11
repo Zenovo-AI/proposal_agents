@@ -281,7 +281,7 @@ async def auth(request: Request):
     
 
 
-@app.get("/logout") 
+@app.get("/api/logout") 
 async def logout():
     # No server-side data to clear; just redirect to login page
     return RedirectResponse(url=app_settings.redirect_uri_3)
@@ -316,12 +316,12 @@ def index(response_class=JSONResponse):
     }
 
 
-@app.get("/health", status_code=status.HTTP_200_OK)
+@app.get("/api/health", status_code=status.HTTP_200_OK)
 def health():
     return "healthy"
 
 
-@app.post("/ingress-file")
+@app.post("/api/ingress-file")
 async def upload_files_and_links(
     files: List[UploadFile] = File([]),
     web_links: List[str] = Form([]),
@@ -419,7 +419,7 @@ async def upload_files_and_links(
         return {"message": f"An error occurred: {str(e)}"}
 
 
-@app.post("/retrieve")
+@app.post("/api/retrieve")
 async def retrieve_query(requestModel: RequestModel, session_data: dict = Depends(get_user_session)):
     print("Received data:", requestModel.model_dump())
     initial_state = {
@@ -523,7 +523,7 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
         )
 
 
-@app.post("/resume")
+@app.post("/api/resume")
 async def resume_graph(payload: dict):
     try:
         state_data = payload["state"]
@@ -621,7 +621,7 @@ async def resume_graph(payload: dict):
         )
 
 
-@app.get("/recent-rfqs")
+@app.get("/api/recent-rfqs")
 def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
     logger.info("📥 Incoming request to /recent-rfqs")
 
@@ -681,7 +681,7 @@ def get_recent_rfqs(session_data: dict = Depends(get_user_session)):
         logger.info("🔒 DB connection closed")
 
 
-@app.post("/search-rfqs")
+@app.post("/api/search-rfqs")
 def search_rfqs(query_data: QueryRequest, session_data: dict = Depends(get_user_session)):
     email = session_data.get("email")
     if not email:
@@ -700,7 +700,7 @@ def search_rfqs(query_data: QueryRequest, session_data: dict = Depends(get_user_
         conn.close()
 
 
-@app.post("/save-to-drive")
+@app.post("/api/save-to-drive")
 async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_user_session)):
     try:
         print("Incoming payload:", payload)
@@ -841,7 +841,7 @@ async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_u
 #         logging.error("Failed to parse prompt suggestions: %s", e)
 #         return {"prompts": []}
 
-@app.post("/prompt-suggestions")
+@app.post("/api/prompt-suggestions")
 async def get_prompt_suggestions(
     payload: PromptRequest,
     session_data: dict = Depends(get_user_session)
@@ -888,7 +888,7 @@ async def get_prompt_suggestions(
 
 
 
-@app.get("/recent-activity")
+@app.get("/api/recent-activity")
 def recent_activity(session_data: dict= Depends(get_user_session)):
     email = session_data.get("email")
     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
@@ -897,7 +897,7 @@ def recent_activity(session_data: dict= Depends(get_user_session)):
     logging.info("Proposals returned: %s", activity.get("proposals", []))
     return activity
 
-@app.get("/winning-proposals")
+@app.get("/api/winning-proposals")
 def winning_proposals(session_data: dict = Depends(get_user_session)):
     email = session_data.get("email")
     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)

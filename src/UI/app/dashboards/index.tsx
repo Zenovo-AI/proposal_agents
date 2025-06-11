@@ -184,7 +184,7 @@ export default function DocumentDashboardPage() {
             onClick={async (e) => {
               e.preventDefault();
               try {
-                await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/logout", {
+                await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/logout", {
                   method: "GET",
                   credentials: "include",
                 });

@@ -20,7 +20,7 @@ const UploadsPage = () => {
   useEffect(() => {
     const fetchRecentRFQs = async () => {
       try {
-        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/recent-rfqs", {
+        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/recent-rfqs", {
           method: "GET",
           credentials: "include",
         });
@@ -46,7 +46,7 @@ const UploadsPage = () => {
 
     setLoading(true);
     try {
-      const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/search-rfqs", {
+      const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/search-rfqs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

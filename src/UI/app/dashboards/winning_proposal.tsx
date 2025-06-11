@@ -134,7 +134,7 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/winning-proposals", {
+        const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/winning-proposals", {
           method: "GET",
           credentials: "include",
         });

@@ -50,7 +50,7 @@ export async function uploadToGoogleDocs({
   });
 
   try {
-    const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/save-to-drive", {
+    const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/save-to-drive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

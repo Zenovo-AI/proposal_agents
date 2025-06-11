@@ -42,7 +42,7 @@ const RecentActivityPage = ({ onBack }: RecentActivityPageProps) => {
       setLoadingData(true);
 
       try {
-        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/recent-activity", {
+        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/recent-activity", {
           method: "GET",
           credentials: "include",
         });
