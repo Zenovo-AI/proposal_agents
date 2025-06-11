@@ -43,7 +43,7 @@ const PromptSuggestionsRow = ({
       console.log("→ sending body:", body);
 
       try {
-        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/prompt-suggestions", {
+        const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/prompt-suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
