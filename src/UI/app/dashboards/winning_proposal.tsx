@@ -240,8 +240,12 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
       {loading && <p>Loading proposals...</p>}
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
-      {!loading && proposals.length === 0 && <p>No winning proposals found.</p>}
-
+      {!loading && proposals.length === 0 && (
+        <div>
+          <p>No winning proposals found.</p>
+          <button onClick={onBack}>Back</button>
+        </div>
+      )}
       {!loading &&
         proposals.map((proposal) => {
           const isExporting = exportingIds.has(proposal.proposal_id);
@@ -293,9 +297,9 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
                   Export error: {exportError}
                 </p>
               )}
-              <div>
+              {/* <div>
                 <button onClick={onBack}>Back</button>
-              </div>
+              </div> */}
             </article>
           );
         })}
