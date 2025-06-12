@@ -297,9 +297,9 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
                   Export error: {exportError}
                 </p>
               )}
-              {/* <div>
+              <div>
                 <button onClick={onBack}>Back</button>
-              </div> */}
+              </div>
             </article>
           );
         })}
