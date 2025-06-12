@@ -120,23 +120,23 @@ else:
     running_mode = "  🏭 ☁  Running in::production mode"
 
 # Define allowed origins for CORS
-# origins = [
-#     "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
-# ]
+origins = [
+    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app"
+]
 
 # Instantiate basicAuth
 security = HTTPBasic()
 
 serializer = URLSafeTimedSerializer(app_settings.session_secret_key)
 # Add CORS middleware first
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-#     expose_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Add Session middleware AFTER CORS
 app.add_middleware(
