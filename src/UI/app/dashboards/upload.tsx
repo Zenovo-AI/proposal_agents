@@ -121,7 +121,7 @@ const UploadPanel = ({ onBack }: UploadPanelProps) => {
     setUploadSuccess(false)
 
     try {
-      const res = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/ingress-file", {
+      const res = await fetch("http://161.35.119.194:8000/api/ingress-file", {
         method: "POST",
         body: formData,
         credentials: "include",
