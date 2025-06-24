@@ -116,7 +116,7 @@ app = FastAPI(
 if app_settings.environment in ["production", "staging"]:
     running_mode = f"  👩‍💻 🛠️  Running in::{app_settings.environment} mode"
 else:
-    app.add_middleware(HTTPSRedirectMiddleware)
+    # app.add_middleware(HTTPSRedirectMiddleware)
     running_mode = "  🏭 ☁  Running in::production mode"
 
 # Define allowed origins for CORS
@@ -272,9 +272,10 @@ async def auth(request: Request):
         response.set_cookie(
             key="user_session",
             value=signed_data,          # or signed_data if that's your token
-            httponly=False,
+            httponly=True,
             samesite="none",       # capitalized is fine, case-insensitive
             secure=True          # False if localhost; True in production HTTPS
+            domain=".zenovo.ai"
         )
 
         return response
