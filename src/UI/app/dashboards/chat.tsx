@@ -49,7 +49,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }, [mode, router, pathname, searchParams])
 
-  const queryUrl = `https://proposal-generator-app-b2pah.ondigitalocean.app/api/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
+  const queryUrl = `https://api.zenovo.ai/api/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
   console.log("💡 Effective RFQ ID:", effectiveRfqId);
 
   const {

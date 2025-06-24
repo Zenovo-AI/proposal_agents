@@ -134,7 +134,7 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/api/winning-proposals", {
+        const response = await fetch("https://api.zenovo.ai/api/winning-proposals", {
           method: "GET",
           credentials: "include",
         });
@@ -196,7 +196,7 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
     };
 
     try {
-      const response = await fetch("https://proposal-generator-app-b2pah.ondigitalocean.app/save-to-drive", {
+      const response = await fetch("https://api.zenovo.ai/api/save-to-drive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
