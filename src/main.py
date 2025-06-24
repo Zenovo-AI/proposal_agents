@@ -274,7 +274,7 @@ async def auth(request: Request):
             value=signed_data,          # or signed_data if that's your token
             httponly=True,
             samesite="none",       # capitalized is fine, case-insensitive
-            secure=True          # False if localhost; True in production HTTPS
+            secure=True,          # False if localhost; True in production HTTPS
             domain=".zenovo.ai"
         )
 
