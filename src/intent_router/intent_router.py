@@ -15,7 +15,7 @@ from config.appconfig import settings as app_settings
 import logging
 from langchain_core.prompts import ChatPromptTemplate
 
-llm = ChatOpenAI(model="gpt-4.1", temperature=0)
+llm = ChatOpenAI(model="gpt-4.1", api_key=app_settings.openai_api_key, temperature=0)
 
 # async def intent_router_agent(state: State) -> str:
 #     query = state.get("query", "")
