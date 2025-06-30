@@ -48,9 +48,12 @@ def structure_node(state: State) -> State:
     structure_generation = structure_agent.invoke({"query": query})
     # Override structure with client-defined structure if it's a full proposal
     if structure_generation["type"] == "full_proposal":
-        defined_structure = proposal_structure()
+        structure_generation = proposal_structure()
     # Store the structure both as dict (for use) and as AIMessage (for LangChain message tracking)
-    structure_message = AIMessage(content=str(structure_generation))
-    state["structure"] = structure_message
+    state["structure"] = structure_generation
+    state["structure_message"] = AIMessage(content=str(structure_generation))
     return state
+
+
+
 

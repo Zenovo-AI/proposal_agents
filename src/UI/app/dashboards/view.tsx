@@ -166,7 +166,7 @@ export default function UploadsPage({ onSelectRfq }: UploadsPageProps) {
   useEffect(() => {
     const fetchRecentRFQs = async () => {
       try {
-        const res = await fetch("https://api.zenovo.ai/api/recent-rfqs", {
+        const res = await fetch("http://localhost:8000/api/recent-rfqs", {
           method: "GET",
           credentials: "include",
         });
@@ -188,7 +188,7 @@ export default function UploadsPage({ onSelectRfq }: UploadsPageProps) {
     if (!searchQuery.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch("https://api.zenovo.ai/api/search-rfqs", {
+      const res = await fetch("http://localhost:8000/api/search-rfqs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: searchQuery }),

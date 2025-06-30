@@ -14,11 +14,12 @@ This state object is passed between agents to maintain consistency and support c
 
 
 from enum import Enum
-from os import replace
-from typing import Annotated, List
+from typing import Annotated, List, Literal, Optional
+from langchain_core.messages import BaseMessage  # type: ignore
 from typing_extensions import TypedDict # type: ignore
 from langgraph.graph.message import add_messages # type: ignore
 from langchain_core.messages.ai import AIMessage # type: ignore
+from datamodel import ProposalStructure # type: ignore
 
 
 class Status(Enum):
@@ -32,13 +33,19 @@ class State(TypedDict):
     user_query: str
     candidate: AIMessage
     examples: str
-    messages: Annotated[list[str], add_messages]
+    messages: Annotated[list[BaseMessage], add_messages]
     runtime_limit: int
     human_feedback: Annotated[List[str], add_messages]
     iteration: int
     status: Status
     rfq_id: str
     mode: str
-    structure: Annotated[AIMessage, add_messages]
+    user_id: str
+    structure: ProposalStructure      # <-- hold the dict here
+    structure_message: AIMessage
     session_data: dict
+    needs_clarification: bool
+    intent_route: str
+    should_save_memory: bool
+    interrupt_type: Optional[Literal["clarification", "proposal_review"]]
 

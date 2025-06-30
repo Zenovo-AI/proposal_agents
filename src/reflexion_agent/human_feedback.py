@@ -5,8 +5,8 @@ enabling real-time review and control over automated reasoning steps.
 """
 
 from reflexion_agent.state import State
-from langgraph.types import Command, interrupt
-from langgraph.graph import END
+from langgraph.types import Command, interrupt # type: ignore
+from langgraph.graph import END # type: ignore
 
 
 

@@ -50,7 +50,7 @@ export async function uploadToGoogleDocs({
   });
 
   try {
-    const response = await fetch("https://api.zenovo.ai/api/save-to-drive", {
+    const response = await fetch("http://localhost:8000/api/save-to-drive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

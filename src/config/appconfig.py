@@ -31,6 +31,7 @@ class AppSettings:
     google_api_key = os.getenv("GOOGLE_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
     openai_api_base = os.getenv("OPENAI_API_BASE")
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     do_spaces_secret_key = os.getenv("DO_SPACES_SECRET_KEY")

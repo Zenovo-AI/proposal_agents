@@ -21,26 +21,60 @@ from langchain_core.prompts import ChatPromptTemplate # type: ignore
 
 
 
-def critic(state: State, llm: ChatOpenAI) -> State:
-    if not state.get("candidate") or not state.get("examples"):
+
+# def critic(state: dict, config: dict) -> dict:
+#     if not state.get("candidate") or not state.get("examples"):
+#         state["status"] = "missing_inputs_for_critique"
+#         return state
+    
+#     llm = ChatOpenAI
+
+#     prompt = ChatPromptTemplate.from_template(prompt_template())
+#     candidate_text = state["candidate"]
+#     retrieved_text = state["examples"]
+
+#     filled_prompt = prompt.invoke({
+#         "generated_proposal": candidate_text,
+#         "retrieved_proposal": retrieved_text
+#     })
+
+#     response = llm.invoke(filled_prompt)
+#     new_candidate = response.content or candidate_text
+
+#     print("[critic] Critique Result Preview:", new_candidate[:500])
+
+#     state["candidate"] = AIMessage(content=new_candidate)
+#     state["messages"] = state.get("messages", []) + [AIMessage(content=new_candidate)]
+#     return state
+
+
+def critic(state: dict, config: dict) -> dict:
+    candidate_msg = state.get("candidate")
+    retrieved = state.get("examples")
+
+    # 🚫 Early exit if missing inputs
+    if not candidate_msg or not retrieved:
         state["status"] = "missing_inputs_for_critique"
         return state
 
-    prompt = ChatPromptTemplate.from_template(prompt_template())
-    candidate_text = state["candidate"]
-    retrieved_text = state["examples"]
+    # Instantiate the LLM
+    llm = ChatOpenAI(model="gpt-4o-2024-08-06", temperature=0)
 
-    filled_prompt = prompt.invoke({
-        "generated_proposal": candidate_text,
-        "retrieved_proposal": retrieved_text
+    # Build the critique prompt
+    prompt = ChatPromptTemplate.from_template(prompt_template())
+    filled = prompt.invoke({
+        "generated_proposal": candidate_msg.content,
+        "retrieved_proposal": retrieved
     })
 
-    response = llm.invoke(filled_prompt)
-    new_candidate = response.content or candidate_text
+    # Run the model and extract new content
+    response: AIMessage = llm.invoke(filled)
+    new_content = response.content or candidate_msg.content
 
-    print("[critic] Critique Result Preview:", new_candidate[:500])
+    print("[critic] Critique Result Preview:", new_content[:500])
 
-    state["candidate"] = AIMessage(content=new_candidate)
-    state["messages"] = state.get("messages", []) + [AIMessage(content=new_candidate)]
+    # Save the updated candidate and append to messages
+    state["candidate"] = AIMessage(content=new_content)
+    state.setdefault("messages", []).append(AIMessage(content=new_content))
     return state
 

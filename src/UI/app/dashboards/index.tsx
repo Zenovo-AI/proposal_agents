@@ -122,6 +122,7 @@ import ChatPanelWithSuspense from "./ChatPanelWithSuspense";
 import UploadsPage from "./view";
 import WinningProposalPage from "./winning_proposal";
 import { useAuth } from "../authentication/useAuth";
+import { InactivityLogout } from "../authentication/InactivityLogout";
 
 export default function DocumentDashboardPage() {
   const router = useRouter();
@@ -165,6 +166,7 @@ export default function DocumentDashboardPage() {
 
   return (
     <main>
+      <InactivityLogout />
       <header className="app-header">
         <Image src={Artboard_3} width={250} alt="CDGA Logo" />
         <div className="user-info">
@@ -184,7 +186,7 @@ export default function DocumentDashboardPage() {
             onClick={async (e) => {
               e.preventDefault();
               try {
-                await fetch("https://api.zenovo.ai/api/logout", {
+                await fetch("http://localhost:8000/api/logout", {
                   method: "GET",
                   credentials: "include",
                 });

@@ -37,24 +37,44 @@ else:
 retriever = BM25Retriever.from_documents(documents)
 
 
-def retrieve_examples(state: State, config: RunnableConfig):
-    top_k = config["configurable"].get("k") or 2
-    query = state["candidate"].content.strip()  # it's just a string now
+# def retrieve_examples(state: State, config: RunnableConfig):
+#     top_k = config["configurable"].get("k") or 2
+#     query = state["candidate"].content.strip()  # it's just a string now
 
-    if not query:
-        raise ValueError("No candidate proposal to critique.")
+#     if not query:
+#         raise ValueError("No candidate proposal to critique.")
 
-    retrieved_docs = retriever.invoke(query)[:top_k]
-    examples_str = "\n---\n".join(doc.page_content for doc in retrieved_docs)
+#     retrieved_docs = retriever.invoke(query)[:top_k]
+#     examples_str = "\n---\n".join(doc.page_content for doc in retrieved_docs)
 
-    print("[retrieve_examples] Retrieved Examples Preview:", examples_str[:500])
+#     print("[retrieve_examples] Retrieved Examples Preview:", examples_str[:500])
 
-    examples_str = f"""You previously wrote the following proposals:
-    <RetrievedProposals>
-    {examples_str}
-    </RetrievedProposals>
+#     examples_str = f"""You previously wrote the following proposals:
+#     <RetrievedProposals>
+#     {examples_str}
+#     </RetrievedProposals>
     
-    Critique the current proposal by comparing it to the above."""
+#     Critique the current proposal by comparing it to the above."""
+
+#     state["examples"] = examples_str
+#     state["status"] = "examples_retrieved"
+
+#     return state
+
+async def retrieve_examples(state: State, config: RunnableConfig) -> dict:
+    # Perform retrieval
+    query = state["user_query"].strip()
+    if not query:
+        raise ValueError("No user query provided for retrieval.")
+
+    docs = retriever.invoke(query)  # fetch all relevant docs
+
+    # Store complete documents for later use
+    state["retrieved_docs"] = docs
+
+    # For critique/comparison contexts, concatenate full content
+    examples_str = "\n---\n".join(doc.page_content for doc in docs)
+    print("[retrieve_examples] Retrieved examples preview:", examples_str[:500])
 
     state["examples"] = examples_str
     state["status"] = "examples_retrieved"

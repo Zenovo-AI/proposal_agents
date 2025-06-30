@@ -16,6 +16,7 @@ class RequestModel(BaseModel):
     user_query:str
     rfq_id: str
     mode: str
+    user_id: str
     chat_history: str = Field(default=None, description="chat history for the user query")
     feedback: str | None = None
 
@@ -36,3 +37,4 @@ class QueryRequest(BaseModel):
 
 class PromptRequest(BaseModel):
     rfq_id: Optional[str] = None
+    

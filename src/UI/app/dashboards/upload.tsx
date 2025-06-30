@@ -121,7 +121,7 @@ const UploadPanel = ({ onBack }: UploadPanelProps) => {
     setUploadSuccess(false)
 
     try {
-      const res = await fetch("https://api.zenovo.ai/api/ingress-file", {
+      const res = await fetch("http://localhost:8000/api/ingress-file", {
         method: "POST",
         body: formData,
         credentials: "include",

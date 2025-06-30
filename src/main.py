@@ -42,8 +42,15 @@ from langchain_openai import OpenAI # type: ignore
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, Request, status, HTTPException, UploadFile, File, Form, Depends # type: ignore
 from models.users_utilities import get_user_session, lookup_user_db_credentials
+# from agent_memory.background_mem import background_memory_saver
+from agent_memory.memory_storage import call_model, route_message, sanitize_user_id, store_memory #call_model, store_memory
+from agent_memory.langMem import google_search_agent
+from intent_router.intent_router import intent_router_agent, interrupt_for_clarification, route_for_rag_clarification
+from agent_memory.background_mem import background_memory_saver
+from structure_agent.query_agent import query_understanding_agent
 from utils import sql_expert_prompt
-from structure_agent.structureAgent import structure_node
+from structure_agent.structure_agent import structure_node
+from langgraph.types import Interrupt # type: ignore
 import os, uvicorn # type: ignore
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware # type: ignore
 from fastapi.security import HTTPBasic # type: ignore
@@ -74,7 +81,17 @@ description = f"""
 {settings.API_STR} helps you do awesome stuff. 🚀
 """
 
-master_engine = create_engine(app_settings.master_db_url)
+master_engine = create_engine(
+    app_settings.master_db_url,
+    pool_pre_ping=True,       # Checks connection health before use
+    pool_recycle=3600,        # Recycles connections every hour
+    connect_args={
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    }
+)
 
 
 # Define a context manager for the application lifespan
@@ -121,7 +138,7 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app",
+    "http://localhost:3000",
 ]
 
 # Instantiate basicAuth
@@ -143,8 +160,8 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=serializer.secret_key,
     session_cookie="session",
-    same_site="none",         # or "none" if using HTTPS
-    https_only=True,        # ✅ False for local dev
+    same_site="lax",         # or "none" if using HTTPS
+    https_only=False,        # ✅ False for local dev
 )
 
 extract_metadata = DocumentProcessor()
@@ -180,7 +197,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     print("Validation error:", exc.errors())
     return await request_validation_exception_handler(request, exc)
 
-@app.get("/api/login")
+@app.get("/api/login/")
 async def login():
     query_params = {
         "client_id": app_settings.client_id,
@@ -272,10 +289,10 @@ async def auth(request: Request):
         response.set_cookie(
             key="user_session",
             value=signed_data,          # or signed_data if that's your token
-            httponly=True,
-            samesite="none",       # capitalized is fine, case-insensitive
-            secure=True,          # False if localhost; True in production HTTPS
-            domain=".zenovo.ai"
+            httponly=False,
+            samesite="lax",       # capitalized is fine, case-insensitive
+            secure=False,          # False if localhost; True in production HTTPS
+            # domain=".zenovo.ai"
         )
 
         return response
@@ -420,9 +437,181 @@ async def upload_files_and_links(
         return {"message": f"An error occurred: {str(e)}"}
 
 
+# @app.post("/api/retrieve")
+# async def retrieve_query(requestModel: RequestModel, session_data: dict = Depends(get_user_session)):
+#     user_id = sanitize_user_id(requestModel.user_id)
+#     print("Received data:", requestModel.model_dump())
+#     initial_state = {
+#         "user_query": requestModel.user_query,
+#         "candidate": None,
+#         "examples": [],
+#         "human_feedback": [],
+#         "critic_feedback": "",
+#         "status": Status.IN_PROGRESS,
+#         "rfq_id": requestModel.rfq_id,
+#         "mode": requestModel.mode,
+#         "user_id": user_id,
+#         "iteration": 0,
+#         "session_data": session_data,
+#     }
+
+#     print("Initial state:", initial_state)
+
+#     try:
+#                 # Create graph
+#         graph = create_state_graph(
+#             State,
+#             intent_router_agent,
+#             query_understanding_agent,
+#             structure_node, generate_draft, retrieve_examples,
+#             critic, human_node, control_edge, google_search_agent,
+#             interrupt_for_clarification, route_message, call_model,
+#             store_memory, background_memory_saver
+#         )
+        
+#         last_response = None
+#         config = RunnableConfig(
+#             recursion_limit=10,
+#             configurable={
+#                 "thread_id": f"{session_data['email']}_thread1",
+#                 "session_data": session_data,
+#                 "user_id":str(user_id)
+#             }
+#         )
+        
+#         interrupt_reached = False
+
+#         async for step in graph.astream(initial_state, config=config):
+#             node_id = list(step.keys())[0]
+#             value = step[node_id]
+
+#             print(f"Current node: {node_id}")  # Debug print
+
+#             match node_id:
+#                 case "draft":   
+#                     ai_message = value.get("candidate", {})
+#                     content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+#                     last_response = content_str
+#                     initial_state["candidate"] = content_str 
+#                     continue
+
+#                 case "retrieve":
+#                     initial_state["examples"] = value.get("examples", [])
+#                     continue
+
+#                 case "critic":
+#                     initial_state["critic_feedback"] = value.get("critique", "")
+#                     continue
+
+#                 case "google_search_agent":  # ✅ Handle agent LLM response
+#                     ai_message = value["messages"][-1] if "messages" in value else value
+#                     content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+#                     last_response = content_str
+#                     break
+
+#                 # case "__interrupt__":
+#                 #     interrupt_reached = True
+
+#                 #     proposal_content = last_response
+                    
+#                 #     if not proposal_content:
+#                 #         return JSONResponse(
+#                 #             content={"error": "No proposal content generated"},
+#                 #             status_code=500
+#                 #         )
+
+#                 #     # Safely convert Enum to string
+#                 #     serializable_state = {
+#                 #         **initial_state,
+#                 #         "status": initial_state["status"].value
+#                 #     }
+
+#                 #     response_payload = {
+#                 #         "interrupt": True,
+#                 #         "message": "Please review the draft and provide your feedback.",
+#                 #         "proposal": proposal_content,
+#                 #         "feedback_options": [
+#                 #             "approve - if the proposal is satisfactory",
+#                 #             "revise - if changes are needed (please specify what to improve)"
+#                 #         ],
+#                 #         "state": serializable_state
+#                 #     }
+
+#                 #     # Log response
+#                 #     logging.info("Returning response: %s", response_payload)
+
+#                 #     return JSONResponse(content=response_payload, status_code=200)
+
+#                 case "__interrupt__":
+#                     interrupt_reached = True
+
+#                     # Distinguish the type
+#                     if value.get("__interrupt__") == "clarification":
+#                         # Get clarification message
+#                         messages = initial_state.get("messages", [])
+#                         clarification = messages[-1].content if messages else "Could you please clarify your question?"
+
+#                         return JSONResponse(
+#                             content={
+#                                 "interrupt": True,
+#                                 "type": "clarification",
+#                                 "message": clarification,
+#                                 "state": {
+#                                     **initial_state,
+#                                     "status": initial_state["status"].value
+#                                 }
+#                             },
+#                             status_code=200
+#                         )
+
+#                     # Else: assume it's proposal review
+#                     proposal_content = last_response
+#                     if not proposal_content:
+#                         return JSONResponse(
+#                             content={"error": "No proposal content generated"},
+#                             status_code=500
+#                         )
+
+#                     serializable_state = {
+#                         **initial_state,
+#                         "status": initial_state["status"].value
+#                     }
+
+#                     response_payload = {
+#                         "interrupt": True,
+#                         "type": "proposal_review",
+#                         "message": "Please review the draft and provide your feedback.",
+#                         "proposal": proposal_content,
+#                         "feedback_options": [
+#                             "approve - if the proposal is satisfactory",
+#                             "revise - if changes are needed (please specify what to improve)"
+#                         ],
+#                         "state": serializable_state
+#                     }
+
+#                     logging.info("Returning response: %s", response_payload)
+#                     return JSONResponse(content=response_payload, status_code=200)
+
+
+#         # If no interrupt reached
+#         if not interrupt_reached:
+#             return JSONResponse(
+#                 content={"error": "Graph completed without reaching interrupt"},
+#                 status_code=500
+#             )
+
+#     except Exception as e:
+#         logging.error("Error in retrieve_query: %s", str(e))
+#         return JSONResponse(
+#             content={"error": f"An error occurred: {str(e)}"},
+#             status_code=500
+#         )
+
 @app.post("/api/retrieve")
 async def retrieve_query(requestModel: RequestModel, session_data: dict = Depends(get_user_session)):
-    print("Received data:", requestModel.model_dump())
+    user_id = sanitize_user_id(requestModel.user_id)
+    # print("Received data:", requestModel.model_dump())
+
     initial_state = {
         "user_query": requestModel.user_query,
         "candidate": None,
@@ -432,29 +621,52 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
         "status": Status.IN_PROGRESS,
         "rfq_id": requestModel.rfq_id,
         "mode": requestModel.mode,
+        "user_id": user_id,
         "iteration": 0,
+        "interrupt_type": None,
         "session_data": session_data,
     }
 
+    logging.info("🟢 Initial state passed to graph: %s", initial_state)
+    print("query_understanding_agent:", query_understanding_agent, type(query_understanding_agent))
+    assert callable(query_understanding_agent), "query_understanding_agent must be a function"
+
     try:
-                # Create graph
+        # Create graph
         graph = create_state_graph(
-            State, structure_node, generate_draft, retrieve_examples, wrapped_critic, 
-            human_node, control_edge
+            State,
+            intent_router_agent,
+            query_understanding_agent,
+            structure_node,
+            retrieve_examples,      # <-- retrieval comes BEFORE generate_draft
+            generate_draft,         # <-- generate_draft comes AFTER retrieve_examples
+            critic,
+            human_node,
+            control_edge,
+            google_search_agent,
+            interrupt_for_clarification,
+            route_message,
+            call_model,
+            store_memory,
+            background_memory_saver
         )
-        
+
         last_response = None
         config = RunnableConfig(
             recursion_limit=10,
             configurable={
                 "thread_id": f"{session_data['email']}_thread1",
                 "session_data": session_data,
+                "user_id": str(user_id)
             }
         )
-        
+
+        logging.info("🛠️ Runnable config: %s", config)
+
         interrupt_reached = False
 
         async for step in graph.astream(initial_state, config=config):
+            logging.info("🧠 Full step returned: %s", step)
             node_id = list(step.keys())[0]
             value = step[node_id]
 
@@ -465,63 +677,129 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
                     ai_message = value.get("candidate", {})
                     content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
                     last_response = content_str
-                    initial_state["candidate"] = content_str 
+                    initial_state["candidate"] = content_str
                     continue
-                    
+
                 case "retrieve":
                     initial_state["examples"] = value.get("examples", [])
                     continue
-                    
+
                 case "critic":
                     initial_state["critic_feedback"] = value.get("critique", "")
                     continue
-                    
+
+                case "google_search_agent":
+                    ai_message = value["messages"][-1] if "messages" in value else value
+                    content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+                    logging.info("Google Search Agent Response: %s", content_str)
+                    last_response = content_str
+                    break
+
+                # case "__interrupt__":
+                #     interrupt_reached = True
+
+                #     if isinstance(value, tuple) and isinstance(value[0], Interrupt):
+                #         interrupt_reached = True
+                #         content_str = value[0].value or ""
+                #         clarification = content_str
+
+                #         return JSONResponse(
+                #             content={
+                #                 "interrupt": True,
+                #                 "type": "clarification",
+                #                 "message": clarification,
+                #                 "response": content_str,
+                #                 "state": {
+                #                     **initial_state,
+                #                     "status": initial_state["status"].value
+                #                 }
+                #             },
+                #             status_code=200
+                #         )
+
+                #     # Otherwise assume proposal review
+                    # proposal_content = last_response
+                    # if not proposal_content:
+                    #     return JSONResponse(
+                    #         content={"error": "No proposal content generated"},
+                    #         status_code=500
+                    #     )
+
+                    # return JSONResponse(
+                    #     content={
+                    #         "interrupt": True,
+                    #         "type": "proposal_review",
+                    #         "message": "Please review the draft and provide your feedback.",
+                    #         "proposal": proposal_content,
+                    #         "feedback_options": [
+                    #             "approve - if the proposal is satisfactory",
+                    #             "revise - if changes are needed (please specify what to improve)"
+                    #         ],
+                    #         "state": {
+                    #             **initial_state,
+                    #             "status": initial_state["status"].value
+                    #         }
+                    #     },
+                    #     status_code=200
+                    # )
+
                 case "__interrupt__":
-                    interrupt_reached = True
+                    if isinstance(value, tuple) and isinstance(value[0], Interrupt):
+                        msg = value[0].value or ""
+                        logging.info("Generated Response: %s", msg)
+                        # Determine the source node
+                        interrupt_type = "clarification" if node_id == "interrupt_for_clarification" else "proposal_review"
 
-                    proposal_content = last_response
-                    
-                    if not proposal_content:
-                        return JSONResponse(
-                            content={"error": "No proposal content generated"},
-                            status_code=500
-                        )
+                        payload = {
+                            "interrupt": True,
+                            "type": interrupt_type,
+                            "message": msg,
+                            "state": {**initial_state, "status": initial_state["status"].value}
+                        }
 
-                    # Safely convert Enum to string
-                    serializable_state = {
+                        if interrupt_type == "proposal_review":
+                            proposal_content = last_response
+                            if not proposal_content:
+                                return JSONResponse({"error": "No proposal content"}, status_code=500)
+                            payload.update({
+                                "proposal": proposal_content,
+                                "feedback_options": ["approve", "revise"]
+                            })
+
+                        return JSONResponse(content=payload, status_code=200)
+
+
+
+        # ✅ Final fallback: valid completion without interrupt
+        if not interrupt_reached and last_response:
+            return JSONResponse(
+                content={
+                    "interrupt": False,
+                    "response": last_response,
+                    "state": {
                         **initial_state,
                         "status": initial_state["status"].value
                     }
-
-                    response_payload = {
-                        "interrupt": True,
-                        "message": "Please review the draft and provide your feedback.",
-                        "proposal": proposal_content,
-                        "feedback_options": [
-                            "approve - if the proposal is satisfactory",
-                            "revise - if changes are needed (please specify what to improve)"
-                        ],
-                        "state": serializable_state
-                    }
-
-                    # Log response
-                    logging.info("Returning response: %s", response_payload)
-
-                    return JSONResponse(content=response_payload, status_code=200)
-
-        # If no interrupt reached
-        if not interrupt_reached:
-            return JSONResponse(
-                content={"error": "Graph completed without reaching interrupt"},
-                status_code=500
+                },
+                status_code=200
             )
 
-    except Exception as e:
-        logging.error("Error in retrieve_query: %s", str(e))
+        # ❌ No response at all
         return JSONResponse(
-            content={"error": f"An error occurred: {str(e)}"},
+            content={"error": "Graph completed but no response was generated"},
             status_code=500
         )
+
+    # except Exception as e:
+    #     logging.error("Error in retrieve_query: %s", str(e))
+    #     return JSONResponse(
+    #         content={"error": f"An error occurred: {str(e)}"},
+    #         status_code=500
+    #     )
+
+    except Exception as compile_error:
+        logging.error("Graph compile failed: %s", compile_error, exc_info=True)
+        return JSONResponse({"error": "Graph initialization failed"}, status_code=500)
 
 
 @app.post("/api/resume")
@@ -554,8 +832,21 @@ async def resume_graph(payload: dict):
 
         # Re-create the graph
         graph = create_state_graph(
-            State, structure_node, generate_draft, retrieve_examples, wrapped_critic,
-            human_node, control_edge
+            State,
+            intent_router_agent,
+            query_understanding_agent,
+            structure_node,
+            retrieve_examples,      
+            generate_draft,         
+            critic,
+            human_node,
+            control_edge,
+            google_search_agent,
+            interrupt_for_clarification,
+            route_message,
+            call_model,
+            store_memory,
+            background_memory_saver
         )
 
         # Apply feedback to config

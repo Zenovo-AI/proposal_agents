@@ -279,9 +279,14 @@ interface ProposalResponse {
   status?: string;
   error?: string;
   state?: State;
+  type?: string;
 }
 
-export function useCustomChat(apiUrl: string, selectedRfq: string, mode: string) {
+export function useCustomChat(
+  apiUrl: string,
+  selectedRfq: string,
+  mode: string
+) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -290,6 +295,8 @@ export function useCustomChat(apiUrl: string, selectedRfq: string, mode: string)
   const [currentState, setCurrentState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState<boolean>(false);
+  const [awaitingFeedback, setAwaitingFeedback] = useState(false);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -297,7 +304,7 @@ export function useCustomChat(apiUrl: string, selectedRfq: string, mode: string)
   };
 
   const append = (msg: Message) => {
-    if (interrupted) {
+    if (awaitingFeedback) {
       sendFeedback(msg.content);
     } else {
       sendMessage(msg.content);
@@ -318,43 +325,65 @@ export function useCustomChat(apiUrl: string, selectedRfq: string, mode: string)
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
 
+
+      // Retrieve user info from localStorage
+      const stored = localStorage.getItem("user");
+      const user = stored ? JSON.parse(stored) : null;
+      const userId = user?.email;
+
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           user_query: content,
           rfq_id: selectedRfq,
-          mode: mode
-         }),
+          mode,
+          user_id: userId,
+        }),
       });
 
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
-      const text = await response.text();
-      let data: ProposalResponse | null = null;
+      const data: ProposalResponse = await response.json();
 
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        throw new Error("Failed to parse server response");
-      }
-
-      if (!data) throw new Error("Empty response from server");
-
-      if (data.interrupt === true) {
-        const interruptContent = data.proposal ?? data.message ?? "Proposal suggestion received.";
+      if (data.interrupt) {
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
-          content: interruptContent,
           role: "assistant",
+          content: data.proposal ?? data.message ?? "",
         };
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages(prev => [...prev, assistantMessage]);
         setInterrupted(true);
-        setFeedbackOptions(data.feedback_options || []);
         setCurrentState(data.state || null);
+
+        if (data.type === "proposal_review") {
+          setAwaitingFeedback(true);
+          setFeedbackOptions(data.feedback_options || []);
+        } else { // clarification interrupt
+          setAwaitingFeedback(false);
+          setFeedbackOptions([]);
+        }
+
         return;
       }
+
+      // Normal (non-interrupt) flow
+      setInterrupted(false);
+      setAwaitingFeedback(false);
+      setFeedbackOptions([]);
+
+      if (data.response) {
+        const assistantMessage: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: data.response,
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
       if (!data.response) throw new Error("Missing response field in server data");
 

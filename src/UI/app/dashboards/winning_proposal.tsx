@@ -134,7 +134,7 @@ const WinningProposalPage: React.FC<WinningProposalPageProps> = ({ onBack }) => 
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("https://api.zenovo.ai/api/winning-proposals", {
+        const response = await fetch("http://localhost:8000/api/winning-proposals", {
           method: "GET",
           credentials: "include",
         });

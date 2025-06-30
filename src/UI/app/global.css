@@ -341,7 +341,7 @@ input:focus {
     text-align: left;
 }
 
-.bubble.user {
+/* .bubble.user {
     border-radius: 20px 20px 0 20px;
     background-color: #E1F4FFFF;
     margin-left: auto;
@@ -350,7 +350,7 @@ input:focus {
 .bubble.assistant {
     border-radius: 20px 20px 20px 0;
     background-color: #dce7ff;
-}
+} */
 
 .prompt-suggestion-row {
   display: flex;                  
@@ -466,12 +466,66 @@ input:focus {
   
 .question-box {
     width: 100%;
-    padding: 12px 16px;
+    padding: 8px 16px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     font-size: 1rem;
   }
-  
+
+  /* .chat-bubble {
+    padding: 2rem 4rem;
+  } */
+
+
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+  margin: 0.5rem 1rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+/* Distinct styles for user vs assistant */
+.chat-bubble.user {
+  background-color: #e0f7ff;
+  margin-left: auto;
+  text-align: right;
+}
+
+.chat-bubble.assistant {
+  background-color: #f1f0f0;
+  margin-right: auto;
+  text-align: left;
+}
+
+.bubble-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  opacity: 0.7;
+}
+
+.bubble-content {
+  white-space: pre-wrap;
+}
+
+
+.question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.response {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  }
+
 .relative {
     position: relative;
   }
