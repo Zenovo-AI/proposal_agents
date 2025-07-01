@@ -386,16 +386,6 @@ export function useCustomChat(
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
       if (!data.response) throw new Error("Missing response field in server data");
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        content: data.response,
-        role: "assistant",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setInterrupted(false);
-      setFeedbackOptions([]);
-      setCurrentState(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
       const errorMessageBubble: Message = {
