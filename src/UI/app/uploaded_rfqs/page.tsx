@@ -20,7 +20,7 @@ const UploadsPage = () => {
   useEffect(() => {
     const fetchRecentRFQs = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/recent-rfqs", {
+        const res = await fetch("https://api.zenovo.ai/api/recent-rfqs", {
           method: "GET",
           credentials: "include",
         });

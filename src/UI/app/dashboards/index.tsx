@@ -186,7 +186,7 @@ export default function DocumentDashboardPage() {
             onClick={async (e) => {
               e.preventDefault();
               try {
-                await fetch("http://localhost:8000/api/logout", {
+                await fetch("https://api.zenovo.ai/api/logout", {
                   method: "GET",
                   credentials: "include",
                 });

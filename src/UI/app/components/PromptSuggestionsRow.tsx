@@ -43,7 +43,7 @@ const PromptSuggestionsRow = ({
       console.log("→ sending body:", body);
 
       try {
-        const res = await fetch("http://localhost:8000/api/prompt-suggestions", {
+        const res = await fetch("https://api.zenovo.ai/api/prompt-suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
