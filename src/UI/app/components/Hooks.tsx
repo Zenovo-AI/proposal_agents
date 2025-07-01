@@ -381,6 +381,7 @@ export function useCustomChat(
           content: data.response,
         };
         setMessages(prev => [...prev, assistantMessage]);
+        return;
       }
 
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
