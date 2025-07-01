@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+const EXPIRY = 2 * 60 * 60 * 1000; // 2 hours
 
 export function InactivityLogout() {
   const router = useRouter();
-  const timerRef = useRef<number>(0);
-  const EXPIRY = 2 * 60 * 60 * 1000; // 2 hours
 
   const resetTimer = () => {
     localStorage.setItem("lastActivity", Date.now().toString());
