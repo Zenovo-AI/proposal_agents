@@ -316,6 +316,10 @@ export function useCustomChat(
       setIsLoading(true);
       setError(null);
 
+      // 🧹 Always reset feedback state early
+      setAwaitingFeedback(false);
+      setFeedbackOptions([]);
+
       const userMessage: Message = {
         id: crypto.randomUUID(),
         content,
@@ -325,12 +329,9 @@ export function useCustomChat(
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
 
-
-      // Retrieve user info from localStorage
       const stored = localStorage.getItem("user");
       const user = stored ? JSON.parse(stored) : null;
       const userId = user?.email;
-
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -358,21 +359,17 @@ export function useCustomChat(
         setInterrupted(true);
         setCurrentState(data.state || null);
 
+        // 🧠 Set feedback options only if type is proposal_review
         if (data.type === "proposal_review") {
           setAwaitingFeedback(true);
           setFeedbackOptions(data.feedback_options || []);
-        } else { // clarification interrupt
-          setAwaitingFeedback(false);
-          setFeedbackOptions([]);
         }
 
         return;
       }
 
-      // Normal (non-interrupt) flow
+      // Non-interrupt fallback
       setInterrupted(false);
-      setAwaitingFeedback(false);
-      setFeedbackOptions([]);
 
       if (data.response) {
         const assistantMessage: Message = {
@@ -384,9 +381,7 @@ export function useCustomChat(
         return;
       }
 
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-      if (!data.response) throw new Error("Missing response field in server data");
+      throw new Error("Missing response field in server data");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
       const errorMessageBubble: Message = {
@@ -400,6 +395,97 @@ export function useCustomChat(
       setIsLoading(false);
     }
   };
+
+
+  // const sendMessage = async (content: string) => {
+  //   try {
+  //     setIsLoading(true);
+  //     setError(null);
+
+  //     const userMessage: Message = {
+  //       id: crypto.randomUUID(),
+  //       content,
+  //       role: "user",
+  //     };
+
+  //     setMessages((prev) => [...prev, userMessage]);
+  //     setInput("");
+
+
+  //     // Retrieve user info from localStorage
+  //     const stored = localStorage.getItem("user");
+  //     const user = stored ? JSON.parse(stored) : null;
+  //     const userId = user?.email;
+
+
+  //     const response = await fetch(apiUrl, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       credentials: "include",
+  //       body: JSON.stringify({
+  //         user_query: content,
+  //         rfq_id: selectedRfq,
+  //         mode,
+  //         user_id: userId,
+  //       }),
+  //     });
+
+  //     if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+  //     const data: ProposalResponse = await response.json();
+
+  //     if (data.interrupt) {
+  //       const assistantMessage: Message = {
+  //         id: crypto.randomUUID(),
+  //         role: "assistant",
+  //         content: data.proposal ?? data.message ?? "",
+  //       };
+  //       setMessages(prev => [...prev, assistantMessage]);
+  //       setInterrupted(true);
+  //       setCurrentState(data.state || null);
+
+  //       if (data.type === "proposal_review") {
+  //         setAwaitingFeedback(true);
+  //         setFeedbackOptions(data.feedback_options || []);
+  //       } else { // clarification interrupt
+  //         setAwaitingFeedback(false);
+  //         setFeedbackOptions([]);
+  //       }
+
+  //       return;
+  //     }
+
+  //     // Normal (non-interrupt) flow
+  //     setInterrupted(false);
+  //     setAwaitingFeedback(false);
+  //     setFeedbackOptions([]);
+
+  //     if (data.response) {
+  //       const assistantMessage: Message = {
+  //         id: crypto.randomUUID(),
+  //         role: "assistant",
+  //         content: data.response,
+  //       };
+  //       setMessages(prev => [...prev, assistantMessage]);
+  //       return;
+  //     }
+
+  //     if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+  //     if (!data.response) throw new Error("Missing response field in server data");
+  //   } catch (err) {
+  //     const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+  //     const errorMessageBubble: Message = {
+  //       id: crypto.randomUUID(),
+  //       content: `⚠️ ${errorMessage}. Please try again.`,
+  //       role: "assistant",
+  //     };
+  //     setMessages((prev) => [...prev, errorMessageBubble]);
+  //     setError(errorMessage);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   const sendFeedback = async (feedback: string) => {
     try {

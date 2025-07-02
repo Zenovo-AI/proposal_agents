@@ -126,9 +126,10 @@ def clean_text(text_content: str) -> str:
 
     return cleaned_text
 
-def query_agent_prompt() -> str:
+def query_agent_prompt(user_query) -> str:
     return """
     You are a Query Clarification and Routing Assistant for CDGA RAG SYSTEM and you are powered by GPT‑4.1.
+    You are a deep thinker, Your decision is very important so you need to take your time to understand {user_query}
     You already have a knowledge base that the user want's to access by sending in the query. 
     Do not ask for the user to present a knowlegde base, just know that the question is clear. But if it is not, then ask for clarification.
 
@@ -142,7 +143,10 @@ def query_agent_prompt() -> str:
         
     }
     *Do not* include any other keys or information.
-
+    E.g: 
+    - Write a proposal for drilling a compliant borehole to IMS standards
+    - Write a proposal against section202
+    
     3. If the query is sufficiently clear and self-contained, **rewrite it** as a fully detailed, actionable query.
     Decide if it can be handled directly by an LLM ("direct") or if it requires retrieval of external documents ("rag").
     Output JSON:
@@ -151,12 +155,18 @@ def query_agent_prompt() -> str:
         "clarified_query": "<complete refined query>",
     }
 
+    E.g:
+    - Please draft a technical proposal for drilling a compliant borehole for seismic monitoring, following IMS requirements.
+    - Could you outline the key steps and considerations for preparing a borehole drilling proposal that meets IMS standards for environmental monitoring?
+
+    
     Rules:
     - Don’t answer or perform the user’s request—only clarify or refine.
     - Ask only one clarification at a time.
     - Keep tone polite, brief, and focused.
     - Output must be valid JSON and nothing else.
     - STRICTLY RETURN A VALID JSON FILE
+    - Never ask for clarification when {user_query} is clarified!
 
     **STRICT RULES:**
     - Only output pure JSON—no code fences, markdown, or extra keys.
@@ -347,39 +357,24 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
 
     ---
 
-    **Expanded Queries:**
-    1. What is the RFQ title, reference number, and issuing organization?
-    2. What is the submission deadline and local time requirement?
-    3. Who is the contact person, and what is the submission email address?
-    4. What is the scope of work for LOT 1 and what are the exact deliverables?
-    5. What is the scope of work for LOT 2 and what are the exact deliverables?
-    6. What technical specifications are required for each LOT?
-    7. What materials and dimensions must be used?
-    8. What acceptance tests must the contractor perform?
-    9. What contractor responsibilities are outlined in each LOT?
-    10. What reporting and documentation is required at the end of the project?
-    11. What legal or regulatory requirements must be followed, particularly in Senegal?
-    12. What safety, environmental, and labor protection rules apply?
-    13. What are the instructions for price breakdowns, currency, and taxes?
-    14. What are the insurance and delivery expectations?
-    15. What are the accepted payment methods and timelines?
-    16. What documents must be submitted with the quotation (forms, confirmations)?
-    17. What evaluation criteria will the commission use (e.g., technically acceptable + cost)?
-    18. What terms govern contract termination, confidentiality, and IP rights?
-    19. Are there any restrictions or requirements regarding use of prior CTBTO employees?
-    20. What annexes or compliance matrices must be completed?
+    Expanded Queries:
+    1. …
+    2. …
+    … up to 20.
 
-    **Final Explicit Query:**
-    "Using the provided RFQ document, extract and organize all necessary technical, financial, compliance,
-    and administrative information to write a full proposal in response to the CTBTO procurement request. 
-    Include all scope of work details for each LOT, clearly state technical specs, test protocols, and contractor responsibilities. 
-    Specify all pricing, delivery, documentation, legal and regulatory conditions, key personnel or team and their CVs and required attachments. 
-    Ensure the proposal is compliant with CTBTO’s General Conditions, local Senegalese laws, UN supplier standards, and evaluation criteria. 
-    Format the proposal content to map exactly to the identified structure: {structure_type}, 
-    with sections such as:\n{section_list}\nInclude all mandatory attachments: {'Yes' if attachments_required else 'No'}."
-
+    Final Explicit Query:
+    "…"
     """
-    response = llm.invoke(prompt)
+
+    
+    # print("[generate_explicit_query] Prompt sent to LLM:\n", prompt)
+
+    try:
+        response = llm.invoke(prompt)
+        # print("[generate_explicit_query] Raw LLM response:\n", repr(response))
+    except Exception as e:
+        print("[generate_explicit_query] Exception during LLM call:", str(e))
+        return ""
     return response.strip()
 
 
@@ -401,7 +396,7 @@ def proposal_prompt(user_query: str, retrieved_docs: list[Document]) -> str:
 
     The user's intent is: **{query_intent}**
 
-    If the intent is 'simple_answer', respond clearly and concisely without using any proposal format or retrieved documents.  
+    If the intent is 'simple_answer', respond clearly using the knowledge retrieved from the knowledge base and make sure your response is related to the {user_query}.  
     If the intent is 'full_proposal', generate a structured proposal using the style and structure of the provided retrieved documents.
 
     # CO‑STAR Instructions
@@ -457,6 +452,7 @@ def proposal_prompt(user_query: str, retrieved_docs: list[Document]) -> str:
     - (If proposal) The retrieved documents and structure provided
 
     ---Response Rules---
+    - NO PREAMBLE
     - If intent is 'simple_answer': provide only the factual response with no proposal structure.
     - If intent is 'full_proposal':
         - Structure the document using clear headings and bullet points.

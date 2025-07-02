@@ -14,7 +14,7 @@ from enum import Enum
 
 class RequestModel(BaseModel):
     user_query:str
-    rfq_id: str
+    rfq_id: Optional[str] = None
     mode: str
     user_id: str
     chat_history: str = Field(default=None, description="chat history for the user query")

@@ -138,7 +138,7 @@ else:
 
 # Define allowed origins for CORS
 origins = [
-    "https://cdga-proposal-agent-r2v7y.ondigitalocean.app",
+    "http://localhost:3000",
 ]
 
 # Instantiate basicAuth
@@ -160,8 +160,8 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=serializer.secret_key,
     session_cookie="session",
-    same_site="none",         # or "none" if using HTTPS
-    https_only=True,        # ✅ False for local dev
+    same_site="lax",         # or "none" if using HTTPS
+    https_only=False,        # ✅ False for local dev
 )
 
 extract_metadata = DocumentProcessor()
@@ -290,9 +290,9 @@ async def auth(request: Request):
             key="user_session",
             value=signed_data,          # or signed_data if that's your token
             httponly=False,
-            samesite="none",       # capitalized is fine, case-insensitive
-            secure=True,          # False if localhost; True in production HTTPS
-            domain=".zenovo.ai"
+            samesite="lax",       # capitalized is fine, case-insensitive
+            secure=False,          # False if localhost; True in production HTTPS
+            # domain=".zenovo.ai"
         )
 
         return response
@@ -638,8 +638,8 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
             intent_router_agent,
             query_understanding_agent,
             structure_node,
-            retrieve_examples,      # <-- retrieval comes BEFORE generate_draft
-            generate_draft,         # <-- generate_draft comes AFTER retrieve_examples
+            retrieve_examples,
+            generate_draft,         
             critic,
             human_node,
             control_edge,
@@ -695,60 +695,22 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
                     last_response = content_str
                     break
 
-                # case "__interrupt__":
-                #     interrupt_reached = True
-
-                #     if isinstance(value, tuple) and isinstance(value[0], Interrupt):
-                #         interrupt_reached = True
-                #         content_str = value[0].value or ""
-                #         clarification = content_str
-
-                #         return JSONResponse(
-                #             content={
-                #                 "interrupt": True,
-                #                 "type": "clarification",
-                #                 "message": clarification,
-                #                 "response": content_str,
-                #                 "state": {
-                #                     **initial_state,
-                #                     "status": initial_state["status"].value
-                #                 }
-                #             },
-                #             status_code=200
-                #         )
-
-                #     # Otherwise assume proposal review
-                    # proposal_content = last_response
-                    # if not proposal_content:
-                    #     return JSONResponse(
-                    #         content={"error": "No proposal content generated"},
-                    #         status_code=500
-                    #     )
-
-                    # return JSONResponse(
-                    #     content={
-                    #         "interrupt": True,
-                    #         "type": "proposal_review",
-                    #         "message": "Please review the draft and provide your feedback.",
-                    #         "proposal": proposal_content,
-                    #         "feedback_options": [
-                    #             "approve - if the proposal is satisfactory",
-                    #             "revise - if changes are needed (please specify what to improve)"
-                    #         ],
-                    #         "state": {
-                    #             **initial_state,
-                    #             "status": initial_state["status"].value
-                    #         }
-                    #     },
-                    #     status_code=200
-                    # )
-
                 case "__interrupt__":
                     if isinstance(value, tuple) and isinstance(value[0], Interrupt):
                         msg = value[0].value or ""
                         logging.info("Generated Response: %s", msg)
-                        # Determine the source node
-                        interrupt_type = "clarification" if node_id == "interrupt_for_clarification" else "proposal_review"
+
+                        # 🔥 FIXED: Properly infer source from value[0].ns
+                        interrupt_ns = value[0].ns or []
+                        logging.info("Interrupt_ns: %s", interrupt_ns)
+                        # interrupt_type = "clarification" if any("clarification" in ns for ns in interrupt_ns) else "proposal_review"
+
+                        interrupt_type = (
+                            "clarification"
+                            if any("interrupt_for_clarification" in ns for ns in interrupt_ns)
+                            else "proposal_review"
+                        )
+                        initial_state["interrupt_type"] = interrupt_type
 
                         payload = {
                             "interrupt": True,
@@ -760,13 +722,21 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
                         if interrupt_type == "proposal_review":
                             proposal_content = last_response
                             if not proposal_content:
-                                return JSONResponse({"error": "No proposal content"}, status_code=500)
+                                return JSONResponse(
+                                    {"error": "No proposal content"},
+                                    status_code=500
+                                )
                             payload.update({
                                 "proposal": proposal_content,
-                                "feedback_options": ["approve", "revise"]
+                                "feedback_options": [
+                                    "approve - if the proposal is satisfactory",
+                                    "revise - if changes are needed (please specify what to improve)"
+                                ]
                             })
 
+                        logging.info("→ payload to frontend: %s", payload)
                         return JSONResponse(content=payload, status_code=200)
+
 
 
 

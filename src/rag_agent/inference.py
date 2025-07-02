@@ -48,11 +48,8 @@ from reflexion_agent.state import State
 from langgraph.graph.message import add_messages # type: ignore
 from structure_agent.defined_proposal_strucutre import proposal_structure
 
-
-proposal_structure_json = json.dumps(proposal_structure(), indent=2)
-
 async def generate_draft(state: dict, config: dict) -> dict:
-    user_query = state["messages"][-1].content.strip()
+    user_query = state["user_query"]
     logging.info("User query: %s", user_query)
     rfq_id = state["rfq_id"]
     logging.info("RFQ file %s", rfq_id)
@@ -60,7 +57,8 @@ async def generate_draft(state: dict, config: dict) -> dict:
     logging.info("Mode selected %s", mode)
     retrieved_docs = state["examples"]
     
-    structure_proposal = state["structure"]
+    structure_proposal = proposal_structure()
+
     feedback = state.get("human_feedback", ["No Feedback yet"])
 
     # Step 1: Expand query using structured context
@@ -97,39 +95,41 @@ async def generate_draft(state: dict, config: dict) -> dict:
     rag.chunk_entity_relation_graph.embedding_func = rag.embedding_func
     param = QueryParam(mode=mode,
                        ids=[rfq_id] if mode == "local" and rfq_id else None,
-                       user_prompt=proposal_prompt(user_query, retrieved_docs),
-                       stream = True,
+                       user_prompt=full_prompt,
                        conversation_history=[],
                        history_turns=5)
 
-    stream_gen = await rag.aquery(full_prompt, param)
-    # chunk can be a dict or string part, adjust accordingly
-    response_chunks = []
-    async for chunk in stream_gen:
-        if isinstance(chunk, dict) and "answer" in chunk:
-            response_chunks.append(chunk["answer"])
-        else:
-            response_chunks.append(str(chunk))
+    # stream_gen = await rag.aquery(full_prompt, param)
+    
+    # # chunk can be a dict or string part, adjust accordingly
+    # response_chunks = []
+    # async for chunk in stream_gen:
+    #     if isinstance(chunk, dict) and "answer" in chunk:
+    #         response_chunks.append(chunk["answer"])
+    #     else:
+    #         response_chunks.append(str(chunk))
 
-    # Join all chunks into one string
-    full_response_text = "".join(response_chunks)
-    metadata = fetch_metadata_from_db(db_user, db_name, db_password)
-    # Step 5: Handle RAG response
-    if isinstance(full_response_text, dict) and "answer" in full_response_text:
-        cleaned_response = clean_text(full_response_text["answer"])
-        sources = []
+    # # Join all chunks into one string
+    # full_response_text = "".join(response_chunks)
+    full_response_text = await rag.aquery(full_prompt, param)
+    cleaned_response = clean_text(full_response_text)
+    # metadata = fetch_metadata_from_db(db_user, db_name, db_password)
+    # # Step 5: Handle RAG response
+    # if isinstance(full_response_text, dict) and "answer" in full_response_text:
+    #     cleaned_response = clean_text(full_response_text["answer"])
+    #     sources = []
 
-        # Extract source metadata from supporting documents
-        for doc in full_response_text.get("source_documents", []):
-            metadata = doc.get("metadata", {})
-            if "source" in metadata:
-                sources.append(metadata["source"])
+    #     # Extract source metadata from supporting documents
+    #     for doc in full_response_text.get("source_documents", []):
+    #         metadata = doc.get("metadata", {})
+    #         if "source" in metadata:
+    #             sources.append(metadata["source"])
 
-        unique_sources = list(set(sources))
-        cleaned_response += f"\n\nSources: {', '.join(unique_sources)}"
-    else:
-        cleaned_response = clean_text(full_response_text)
-        unique_sources = []
+    #     unique_sources = list(set(sources))
+    #     cleaned_response += f"\n\nSources: {', '.join(unique_sources)}"
+    # else:
+    #     cleaned_response = clean_text(full_response_text)
+    #     unique_sources = []
 
     print("[generate_draft] RAG Response Preview:", cleaned_response[:500])
 
@@ -138,7 +138,7 @@ async def generate_draft(state: dict, config: dict) -> dict:
     ai_msg = AIMessage(content=candidate_text)
     state["candidate"] = ai_msg
     state["messages"] = add_messages(state.get("messages", []), [ai_msg])
-    state["source_documents"] = unique_sources
+    # state["source_documents"] = unique_sources
 
     return state
 

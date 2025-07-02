@@ -61,6 +61,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
     handleInputChange,
     handleSubmit,
     interrupted,
+    feedbackOptions, 
     error,
     setError,
   } = useCustomChat(queryUrl, effectiveRfqId, mode)
@@ -228,7 +229,49 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
         </div>
       )}
 
-      {interrupted ? (
+      {/* {interrupted ? (
+        <div className="feedback-prompt">
+          <p>Please provide feedback:</p>
+          <form onSubmit={handleSubmit}>
+            <input
+              className="question-box"
+              onChange={handleInputChange}
+              value={input}
+              placeholder="Please enter your feedback or type 'Approve' to approve proposal..."
+              disabled={isLoading}
+            />
+            <button type="submit" disabled={isLoading}>Changes needed</button>
+            <TypeaheadPrompts
+              input={input}
+              suggestions={FEEDBACK_OPTIONS}
+              onSelect={(selected) => {
+                append({ id: crypto.randomUUID(), content: selected, role: "user" })
+                setInput("")
+              }}
+            />
+          </form>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <input
+            className="question-box"
+            onChange={handleInputChange}
+            value={input}
+            placeholder="Ask me something..."
+          />
+          <input type="submit" value="Send" />
+          <TypeaheadPrompts
+            input={input}
+            suggestions={COMMON_PROMPTS}
+            onSelect={(selected) => {
+              append({ id: crypto.randomUUID(), content: selected, role: "user" })
+              setInput("")
+            }}
+          />
+        </form>
+      )} */}
+
+      {interrupted && feedbackOptions.length > 0 ? (
         <div className="feedback-prompt">
           <p>Please provide feedback:</p>
           <form onSubmit={handleSubmit}>
@@ -269,6 +312,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
           />
         </form>
       )}
+
 
       <button onClick={onBack}>⬅ Back</button>
     </>

@@ -55,7 +55,7 @@ async def query_understanding_agent(state: dict, config: dict) -> dict:
     if not user_query:
         raise HTTPException(status_code=400, detail="Missing user_query in state")
 
-    system_prompt = query_agent_prompt()  # define this prompt
+    system_prompt = query_agent_prompt(user_query)  # define this prompt
 
     client = AsyncOpenAI(api_key=app_settings.openai_api_key)
     response = await client.chat.completions.create(
