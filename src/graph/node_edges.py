@@ -4,7 +4,7 @@ from langgraph.checkpoint.memory import InMemorySaver # type: ignore
 from langchain.embeddings import init_embeddings # type: ignore
 from langgraph.graph import END, StateGraph # type: ignore
 from reflexion_agent.state import State, Status
-from intent_router.intent_router import route_for_rag_clarification, route_intent, safe_route_for_rag_clarification 
+from intent_router.intent_router import route_intent 
 from langchain_core.runnables import RunnableLambda # type: ignore
 
 # Initialize semantic InMemoryStore
@@ -31,7 +31,6 @@ def control_edge(state: State):
 def create_state_graph(
     State,
     intent_router_agent,
-    query_understanding_agent,
     structure_node,
     retrieve_examples,      
     generate_draft,         
@@ -39,7 +38,6 @@ def create_state_graph(
     human_node,
     control_edge,
     google_search_agent,
-    interrupt_for_clarification,
     route_message,
     call_model,
     store_memory,
@@ -48,13 +46,11 @@ def create_state_graph(
     builder = StateGraph(State)
     for name, fn in [
         ("intent_router_agent", intent_router_agent),
-        ("query_understanding_agent", query_understanding_agent),
         ("structure_node", structure_node),
         ("retrieve", retrieve_examples),
         ("draft", generate_draft),
         ("critic", critic),
         ("human_interrupt", human_node),
-        ("interrupt_for_clarification", interrupt_for_clarification),
         ("google_search_agent", google_search_agent),
         ("call_model", call_model),
         ("store_memory", store_memory),
@@ -75,7 +71,7 @@ def create_state_graph(
         route_intent,
         {
             "google_search_agent": "google_search_agent",
-            "query_understanding_agent": "query_understanding_agent"
+            "structure_node": "structure_node"
         }
     )
 
@@ -85,14 +81,14 @@ def create_state_graph(
     builder.add_edge("google_search_agent", "call_model")
 
     # ➤ Step 2b: if rag → go to query_agent → decide if ambiguous or not
-    builder.add_conditional_edges(
-        "query_understanding_agent",
-        safe_route_for_rag_clarification,
-        {
-            "structure_node": "structure_node",  # Clear → RAG pipeline
-            "interrupt_for_clarification": "interrupt_for_clarification"  # Ambiguous → ask user
-        }
-    )
+    # builder.add_conditional_edges(
+    #     "query_understanding_agent",
+    #     safe_route_for_rag_clarification,
+    #     {
+    #         "structure_node": "structure_node",  # Clear → RAG pipeline
+    #         "interrupt_for_clarification": "interrupt_for_clarification"  # Ambiguous → ask user
+    #     }
+    # )
     logging.info("Route Decided with understanding query⭐")
     # ➤ RAG pipeline
     builder.add_edge("structure_node", "retrieve")

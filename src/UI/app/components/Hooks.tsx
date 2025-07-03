@@ -21,243 +21,8 @@
  */
 
 
-
-// import { useState } from "react"
-// import { Message } from "ai"
-
-// interface State {
-//   user_query: string;
-//   candidate: Message;
-//   examples: string;
-//   messages: string[];
-//   runtime_limit: number;
-//   human_feedback: string[];
-//   iteration: number;
-//   structure: Message;
-// }
-
-
-// interface ProposalResponse {
-//   interrupt?: boolean
-//   proposal?: string
-//   message?: string
-//   feedback_options?: string[]
-//   response?: string
-//   status?: string
-//   error?: string
-//   state?: State
-// }
-
-// export function useCustomChat(apiUrl: string) {
-//   const [messages, setMessages] = useState<Message[]>([])
-//   const [input, setInput] = useState<string>("")
-//   const [isLoading, setIsLoading] = useState<boolean>(false)
-//   const [interrupted, setInterrupted] = useState<boolean>(false)
-//   const [feedbackOptions, setFeedbackOptions] = useState<string[]>([])
-//   const [currentState, setCurrentState] = useState<any>(null)
-//   const [error, setError] = useState<string | null>(null)
-//   const [isApproved, setIsApproved] = useState<boolean>(false)
-
-//   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     setInput(e.target.value)
-//     setError(null)
-//   }
-
-//   const append = (msg: Message) => {
-//     if (interrupted) {
-//       sendFeedback(msg.content)
-//     } else {
-//       sendMessage(msg.content)
-//     }
-//   }
-
-//   const sendMessage = async (content: string) => {
-//     try {
-//       setIsLoading(true)
-//       setError(null)
-
-//       const userMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content,
-//         role: "user",
-//       }
-
-//       setMessages((prev) => [...prev, userMessage])
-//       setInput("")
-
-//       const response = await fetch(apiUrl, {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ user_query: content }),
-//       })
-
-//       if (!response.ok) throw new Error(`Server error: ${response.status}`)
-
-//       const text = await response.text()
-//       let data: ProposalResponse | null = null
-
-//       try {
-//         data = text ? JSON.parse(text) : null
-//       } catch {
-//         throw new Error("Failed to parse server response")
-//       }
-
-//       if (!data) throw new Error("Empty response from server")
-
-//       if (data.interrupt === true) {
-//         const interruptContent: string =
-//           data.proposal ?? data.message ?? "Proposal suggestion received."
-
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: interruptContent,
-//           role: "assistant",
-//         }
-
-//         setMessages((prev) => [...prev, assistantMessage])
-//         setInterrupted(true)
-//         setFeedbackOptions(data.feedback_options || [])
-//         setCurrentState(data.state)
-//         return
-//       }
-
-//       if (!data.response) throw new Error("Missing response field in server data")
-
-//       const assistantMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content: data.response,
-//         role: "assistant",
-//       }
-
-//       setMessages((prev) => [...prev, assistantMessage])
-//       setInterrupted(false)
-//       setFeedbackOptions([])
-//       setCurrentState(null)
-//     } catch (err) {
-//       const errorMessage =
-//         err instanceof Error ? err.message : "Unknown error occurred"
-//       const errorMessageBubble: Message = {
-//         id: crypto.randomUUID(),
-//         content: `⚠️ ${errorMessage}. Please try again.`,
-//         role: "assistant",
-//       }
-//       setMessages((prev) => [...prev, errorMessageBubble])
-//       setError(errorMessage)
-//     } finally {
-//       setIsLoading(false)
-//     }
-//   }
-
-
-//   const sendFeedback = async (feedback: string) => {
-//     try {
-//       setIsLoading(true)
-//       setError(null)
-
-//       const feedbackMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content: feedback,
-//         role: "user",
-//       }
-
-//       setMessages((prev) => [...prev, feedbackMessage])
-//       setInput("")
-
-//       const response = await fetch(apiUrl.replace("/retrieve", "/resume"), {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ state: currentState, feedback }),
-//       })
-
-//       if (!response.ok) throw new Error(`Server error: ${response.status}`)
-
-//       const data: ProposalResponse = await response.json()
-//       if (data.error) throw new Error(data.error)
-
-//       if (data.interrupt && data.proposal) {
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: data.proposal,
-//           role: "assistant",
-//         }
-
-//         setMessages((prev) => [...prev, assistantMessage])
-//         setFeedbackOptions(data.feedback_options || [])
-//         setCurrentState(data.state)
-//         return
-//       }
-
-//       if (data.status === "approved") {
-//         const approvedMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: "✅ Proposal approved. You can now upload it to Google Docs.",
-//           role: "assistant",
-//         };
-      
-//         setMessages((prev) => [...prev, approvedMessage]);
-//         setInterrupted(false);
-//         setFeedbackOptions([]);
-//         setCurrentState(data.state);   // save the state for uploading later
-//         setIsApproved(true);           // flag to show upload button
-//         return;
-//       }
-      
-
-
-//       if (data.response) {
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: data.response,
-//           role: "assistant",
-//         }
-
-//         setMessages((prev) => [...prev, assistantMessage])
-//       }
-//     } catch (err) {
-//       const errorMessage =
-//         err instanceof Error ? err.message : "Failed to send feedback"
-//       const errorMessageBubble: Message = {
-//         id: crypto.randomUUID(),
-//         content: `⚠️ ${errorMessage}. Please try again.`,
-//         role: "assistant",
-//       }
-//       setMessages((prev) => [...prev, errorMessageBubble])
-//       setError(errorMessage)
-//     } finally {
-//       setIsLoading(false)
-//     }
-//   }
-
-//   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-//     e.preventDefault()
-//     if (!input.trim()) return
-//     if (interrupted) {
-//       sendFeedback(input)
-//     } else {
-//       sendMessage(input)
-//     }
-//     setInput("")
-//   }
-
-//   return {
-//     messages,
-//     input,
-//     setInput,
-//     isLoading,
-//     error,
-//     setError,
-//     handleInputChange,
-//     handleSubmit,
-//     append,
-//     interrupted,
-//     feedbackOptions,
-//   }
-// }
-
-
-
-import { Message } from "ai";
 import { useState } from "react";
+import { Message } from "ai";
 
 interface State {
   user_query: string;
@@ -295,37 +60,33 @@ export function useCustomChat(
   const [currentState, setCurrentState] = useState<State | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState<boolean>(false);
-  const [awaitingFeedback, setAwaitingFeedback] = useState(false);
 
-
+  // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
     setError(null);
   };
 
+  // Append a message (used for prompt suggestions)
   const append = (msg: Message) => {
-    if (awaitingFeedback) {
-      sendFeedback(msg.content);
+    if (interrupted) {
+      handleFeedback(msg.content);
     } else {
-      sendMessage(msg.content);
+      handleMessage(msg.content);
     }
   };
 
-  const sendMessage = async (content: string) => {
+  // Send a user message to the backend
+  const handleMessage = async (content: string) => {
     try {
       setIsLoading(true);
       setError(null);
-
-      // 🧹 Always reset feedback state early
-      setAwaitingFeedback(false);
-      setFeedbackOptions([]);
 
       const userMessage: Message = {
         id: crypto.randomUUID(),
         content,
         role: "user",
       };
-
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
 
@@ -352,142 +113,54 @@ export function useCustomChat(
       if (data.interrupt) {
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
-          role: "assistant",
           content: data.proposal ?? data.message ?? "",
+          role: "assistant",
         };
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
         setInterrupted(true);
         setCurrentState(data.state || null);
-
-        // 🧠 Set feedback options only if type is proposal_review
-        if (data.type === "proposal_review") {
-          setAwaitingFeedback(true);
-          setFeedbackOptions(data.feedback_options || []);
-        }
-
+        setFeedbackOptions(data.feedback_options || []);
         return;
       }
 
-      // Non-interrupt fallback
       setInterrupted(false);
+      setFeedbackOptions([]);
+      setCurrentState(null);
 
       if (data.response) {
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
-          role: "assistant",
           content: data.response,
+          role: "assistant",
         };
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
         return;
       }
 
       throw new Error("Missing response field in server data");
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-      const errorMessageBubble: Message = {
-        id: crypto.randomUUID(),
-        content: `⚠️ ${errorMessage}. Please try again.`,
-        role: "assistant",
-      };
-      setMessages((prev) => [...prev, errorMessageBubble]);
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          content: `⚠️ ${errorMessage}. Please try again.`,
+          role: "assistant",
+        },
+      ]);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-
-  // const sendMessage = async (content: string) => {
-  //   try {
-  //     setIsLoading(true);
-  //     setError(null);
-
-  //     const userMessage: Message = {
-  //       id: crypto.randomUUID(),
-  //       content,
-  //       role: "user",
-  //     };
-
-  //     setMessages((prev) => [...prev, userMessage]);
-  //     setInput("");
-
-
-  //     // Retrieve user info from localStorage
-  //     const stored = localStorage.getItem("user");
-  //     const user = stored ? JSON.parse(stored) : null;
-  //     const userId = user?.email;
-
-
-  //     const response = await fetch(apiUrl, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       credentials: "include",
-  //       body: JSON.stringify({
-  //         user_query: content,
-  //         rfq_id: selectedRfq,
-  //         mode,
-  //         user_id: userId,
-  //       }),
-  //     });
-
-  //     if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-  //     const data: ProposalResponse = await response.json();
-
-  //     if (data.interrupt) {
-  //       const assistantMessage: Message = {
-  //         id: crypto.randomUUID(),
-  //         role: "assistant",
-  //         content: data.proposal ?? data.message ?? "",
-  //       };
-  //       setMessages(prev => [...prev, assistantMessage]);
-  //       setInterrupted(true);
-  //       setCurrentState(data.state || null);
-
-  //       if (data.type === "proposal_review") {
-  //         setAwaitingFeedback(true);
-  //         setFeedbackOptions(data.feedback_options || []);
-  //       } else { // clarification interrupt
-  //         setAwaitingFeedback(false);
-  //         setFeedbackOptions([]);
-  //       }
-
-  //       return;
-  //     }
-
-  //     // Normal (non-interrupt) flow
-  //     setInterrupted(false);
-  //     setAwaitingFeedback(false);
-  //     setFeedbackOptions([]);
-
-  //     if (data.response) {
-  //       const assistantMessage: Message = {
-  //         id: crypto.randomUUID(),
-  //         role: "assistant",
-  //         content: data.response,
-  //       };
-  //       setMessages(prev => [...prev, assistantMessage]);
-  //       return;
-  //     }
-
-  //     if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-  //     if (!data.response) throw new Error("Missing response field in server data");
-  //   } catch (err) {
-  //     const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-  //     const errorMessageBubble: Message = {
-  //       id: crypto.randomUUID(),
-  //       content: `⚠️ ${errorMessage}. Please try again.`,
-  //       role: "assistant",
-  //     };
-  //     setMessages((prev) => [...prev, errorMessageBubble]);
-  //     setError(errorMessage);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  const sendFeedback = async (feedback: string) => {
+  // Send feedback to the backend, always with the latest state
+  const handleFeedback = async (feedback: string) => {
+    if (!currentState) {
+      setError("Cannot send feedback: missing conversation state.");
+      return;
+    }
     try {
       setIsLoading(true);
       setError(null);
@@ -500,10 +173,20 @@ export function useCustomChat(
       setMessages((prev) => [...prev, feedbackMessage]);
       setInput("");
 
+      // Optionally, update human_feedback in state before sending
+      const newState = {
+        ...currentState,
+        human_feedback: [
+          ...(currentState.human_feedback || []),
+          feedback,
+        ],
+        interrupt_type: "human_interrupt",
+      };
+
       const response = await fetch(apiUrl.replace("/retrieve", "/resume"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: currentState, feedback }),
+        body: JSON.stringify({ state: newState, feedback }),
         credentials: "include",
       });
 
@@ -547,26 +230,30 @@ export function useCustomChat(
         setMessages((prev) => [...prev, assistantMessage]);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to send feedback";
-      const errorMessageBubble: Message = {
-        id: crypto.randomUUID(),
-        content: `⚠️ ${errorMessage}. Please try again.`,
-        role: "assistant",
-      };
-      setMessages((prev) => [...prev, errorMessageBubble]);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to send feedback";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          content: `⚠️ ${errorMessage}. Please try again.`,
+          role: "assistant",
+        },
+      ]);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Unified submit handler
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim()) return;
     if (interrupted) {
-      sendFeedback(input);
+      handleFeedback(input);
     } else {
-      sendMessage(input);
+      handleMessage(input);
     }
     setInput("");
   };
@@ -587,241 +274,5 @@ export function useCustomChat(
     currentState,
   };
 }
-
-
-
-// import { Message } from "ai";
-// import { useState } from "react";
-
-// interface State {
-//   user_query: string;
-//   candidate: Message;
-//   examples: string;
-//   messages: string[];
-//   runtime_limit: number;
-//   human_feedback: string[];
-//   iteration: number;
-//   structure: Message;
-// }
-
-// interface ProposalResponse {
-//   interrupt?: boolean;
-//   proposal?: string;
-//   message?: string;
-//   feedback_options?: string[];
-//   response?: string;
-//   status?: string;
-//   error?: string;
-//   state?: State;
-// }
-
-
-// export function useCustomChat(apiUrl: string, selectedRfqIds: string[]) {
-//   const [messages, setMessages] = useState<Message[]>([]);
-//   const [input, setInput] = useState<string>("");
-//   const [isLoading, setIsLoading] = useState<boolean>(false);
-//   const [interrupted, setInterrupted] = useState<boolean>(false);
-//   const [feedbackOptions, setFeedbackOptions] = useState<string[]>([]);
-//   const [currentState, setCurrentState] = useState<State | null>(null);
-//   const [error, setError] = useState<string | null>(null);
-//   const [isApproved, setIsApproved] = useState<boolean>(false);
-//   const [selectedRfqIds, setSelectedRfqIds] = useState<string[]>([])
-
-//   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     setInput(e.target.value);
-//     setError(null);
-//   };
-
-//   const append = (msg: Message) => {
-//     if (interrupted) {
-//       sendFeedback(msg.content);
-//     } else {
-//       sendMessage(msg.content);
-//     }
-//   };
-
-//   const sendMessage = async (content: string) => {
-//     try {
-//       setIsLoading(true);
-//       setError(null)
-
-//       const userMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content,
-//         role: "user",
-//       };
-
-//       setMessages((prev) => [...prev, userMessage]);
-//       setInput("");
-
-//       const response = await fetch(apiUrl, {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         credentials: "include",
-//         body: JSON.stringify({ user_query: content,  rfq_ids: selectedRfqIds }),
-//       });
-
-//       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-//       const text = await response.text();
-//       let data: ProposalResponse | null = null;
-
-//       try {
-//         data = text ? JSON.parse(text) : null;
-//       } catch {
-//         throw new Error("Failed to parse server response");
-//       }
-
-//       if (!data) throw new Error("Empty response from server");
-
-//       if (data.interrupt === true) {
-//         const interruptContent: string =
-//           data.proposal ?? data.message ?? "Proposal suggestion received.";
-
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: interruptContent,
-//           role: "assistant",
-//         };
-
-//         setMessages((prev) => [...prev, assistantMessage]);
-//         setInterrupted(true);
-//         setFeedbackOptions(data.feedback_options || []);
-//         setCurrentState(data.state || null);
-//         return;
-//       }
-
-//       if (!data.response) throw new Error("Missing response field in server data");
-
-//       const assistantMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content: data.response,
-//         role: "assistant",
-//       };
-
-//       setMessages((prev) => [...prev, assistantMessage]);
-//       setInterrupted(false);
-//       setFeedbackOptions([]);
-//       setCurrentState(null);
-//     } catch (err) {
-//       const errorMessage =
-//         err instanceof Error ? err.message : "Unknown error occurred";
-//       const errorMessageBubble: Message = {
-//         id: crypto.randomUUID(),
-//         content: `⚠️ ${errorMessage}. Please try again.`,
-//         role: "assistant",
-//       };
-//       setMessages((prev) => [...prev, errorMessageBubble]);
-//       setError(errorMessage);
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
-
-//   const sendFeedback = async (feedback: string) => {
-//     try {
-//       setIsLoading(true);
-//       setError(null);
-
-//       const feedbackMessage: Message = {
-//         id: crypto.randomUUID(),
-//         content: feedback,
-//         role: "user",
-//       };
-
-//       setMessages((prev) => [...prev, feedbackMessage]);
-//       setInput("");
-
-//       const response = await fetch(apiUrl.replace("/retrieve", "/resume"), {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({ state: currentState, feedback }),
-//         credentials: "include"
-//       });
-
-//       if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-//       const data: ProposalResponse = await response.json();
-//       if (data.error) throw new Error(data.error);
-
-//       if (data.interrupt && data.proposal) {
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: data.proposal,
-//           role: "assistant",
-//         };
-
-//         setMessages((prev) => [...prev, assistantMessage]);
-//         setFeedbackOptions(data.feedback_options || []);
-//         setCurrentState(data.state || null);
-//         return;
-//       }
-
-//       if (data.status === "approved") {
-//         const approvedMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: "✅ Proposal approved. You can now upload it to Google Docs.",
-//           role: "assistant",
-//         };
-
-//         setMessages((prev) => [...prev, approvedMessage]);
-//         setInterrupted(false);
-//         setFeedbackOptions([]);
-//         setCurrentState(data.state || null);
-//         setIsApproved(true);
-//         return;
-//       }
-
-//       if (data.response) {
-//         const assistantMessage: Message = {
-//           id: crypto.randomUUID(),
-//           content: data.response,
-//           role: "assistant",
-//         };
-
-//         setMessages((prev) => [...prev, assistantMessage]);
-//       }
-//     } catch (err) {
-//       const errorMessage =
-//         err instanceof Error ? err.message : "Failed to send feedback";
-//       const errorMessageBubble: Message = {
-//         id: crypto.randomUUID(),
-//         content: `⚠️ ${errorMessage}. Please try again.`,
-//         role: "assistant",
-//       };
-//       setMessages((prev) => [...prev, errorMessageBubble]);
-//       setError(errorMessage);
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
-
-//   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-//     e.preventDefault();
-//     if (!input.trim()) return;
-//     if (interrupted) {
-//       sendFeedback(input);
-//     } else {
-//       sendMessage(input);
-//     }
-//     setInput("");
-//   };
-
-//   return {
-//     messages,
-//     input,
-//     setInput,
-//     isLoading,
-//     error,
-//     setError,
-//     handleInputChange,
-//     handleSubmit,
-//     append,
-//     interrupted,
-//     feedbackOptions,
-//     isApproved,        // included here for usage in UI
-//     currentState,      // also returning currentState for possible upload
-//   };
-// }
 
 

@@ -13,7 +13,7 @@ from reflexion_agent.state import State # type: ignore
 from openai import AsyncOpenAI # type: ignore
 from config.appconfig import settings as app_settings
 import logging
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate # type: ignore
 
 llm = ChatOpenAI(model="gpt-4.1", openai_api_key=app_settings.openai_api_key, temperature=0)
 
@@ -72,8 +72,12 @@ async def intent_router_agent(state: State) -> State:
 
     # 🔍 Strong deterministic routing prompt
     system_prompt = f"""
-    You are CDGA-AI, an intelligent intent classification agent. You help route user queries to one of two processing pipelines:
-    1. `direct`: for simple greetings, general facts, weather, or questions about you.
+    You are CDGA-AI, an intelligent intent classification agent.
+
+    You must think deeply about user's query** and know that 99% of query** must be classify as **rag**
+
+    You help route user queries to one of two processing pipelines:
+    1. `direct`: for simple greetings or questions about you only.
     2. `rag`: for anything involving RFQs, proposals, CTBTO, CDGA, document-based knowledge, technical steps, warranties, or organizational experience.
 
     You must **critically analyze the user's query** and make a precise decision.
@@ -81,7 +85,7 @@ async def intent_router_agent(state: State) -> State:
 
     INSTRUCTIONS:
     - If the query involves CDGA, CTBTO, RFQs, uploaded documents, or technical/factual project details, respond with: **rag**
-    - If the query is a general question, greeting, or simple knowledge request, respond with: **direct**
+    - If the query is a greeting, or question about you, respond with: **direct**
 
     RULES:
     1. Always map queries involving:
@@ -96,7 +100,6 @@ async def intent_router_agent(state: State) -> State:
 
     EXAMPLES:
     - "Hi there!" → direct
-    - "What’s the weather in Lagos today?" → direct
     - "Who are you?" → direct
     - "What experience does CDGA have working with CTBTO?" → rag
     - "Summarize warranty terms in the last RFQ response." → rag
@@ -135,7 +138,7 @@ async def intent_router_agent(state: State) -> State:
 def route_intent(state: State) -> str:
     route = state.get("intent_route", "").lower().strip()
     if route == "rag":
-        return "query_understanding_agent"
+        return "structure_node"
     elif route == "direct":
         return "google_search_agent"
     else:

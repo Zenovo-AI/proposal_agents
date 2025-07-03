@@ -125,7 +125,7 @@ def insert_file_metadata(document_name, file_name, file_content, db_user, db_nam
 # ---------------- Metadata with LLM ----------------
 
 def extract_metadata_with_llm(text):
-    from langchain_openai import OpenAI
+    from langchain_openai import OpenAI # type: ignore
     llm = OpenAI(temperature = 0, openai_api_key=app_settings.openai_api_key)
     prompt = f"""
     You are an AI assistant that extracts metadata from tender documents.
@@ -154,51 +154,117 @@ def extract_metadata_with_llm(text):
     return json.loads(response)
 
 
+# def extract_prompt_suggestions(text: str) -> List[str]:
+#     client = OpenAI(api_key=app_settings.openai_api_key)
+#     prompt = f"""
+#     You are an assistant that ***STRICTLY*** generates insightful prompt suggestions based on RFQ documents.
+
+#     Your task is to read the RFQ content below and generate exactly 4 advanced, domain-relevant questions that someone might ask when preparing a technical or proposal response.
+#     Always generate prompt suggestions, NEVER LEAVE IT BLANK.
+#     Make sure that each prompt suggestion doesn't exceed 10  to 15 words.
+    
+
+#     ⚠️ Strict Instructions:
+#     - Format your response as a **valid JSON array of 4 strings**.
+#     - Do NOT include any explanations, markdown, or extra text — just return the raw array.
+#     - Example format:
+#     [
+#     "First question?",
+#     "Second question?",
+#     "Third question?",
+#     "Fourth question?"
+#     ]
+
+#     RFQ Content:
+#     {text}
+#     """
+
+#     response = client.chat.completions.create(
+#         model="gpt-4o-2024-08-06",
+#         messages=[{"role": "system", "content": prompt}],
+#         response_format={"type": "json_object"},
+#         temperature=0
+#     )
+
+
+#     logging.info("Prompt: %s", response)
+#     try:
+#         data = json.loads(response.choices[0].message.content)
+#         suggestions = data.get("questions", [])
+#         if isinstance(suggestions, list) and len(suggestions) == 4:
+#             return suggestions
+#         else:
+#             logging.warning(f"Prompt suggestions not a list: {response}")
+#             return []
+#     except json.JSONDecodeError:
+#         logging.error(f"Failed to parse prompt suggestions: {response}")
+#         return []
+
 def extract_prompt_suggestions(text: str) -> List[str]:
     client = OpenAI(api_key=app_settings.openai_api_key)
+
     prompt = f"""
     You are an assistant that ***STRICTLY*** generates insightful prompt suggestions based on RFQ documents.
 
     Your task is to read the RFQ content below and generate exactly 4 advanced, domain-relevant questions that someone might ask when preparing a technical or proposal response.
     Always generate prompt suggestions, NEVER LEAVE IT BLANK.
-    Make sure that each prompt suggestion doesn't exceed 10  to 15 words.
-    
+    Make sure that each prompt suggestion doesn't exceed 10 to 15 words.
 
     ⚠️ Strict Instructions:
     - Format your response as a **valid JSON array of 4 strings**.
     - Do NOT include any explanations, markdown, or extra text — just return the raw array.
     - Example format:
     [
-    "First question?",
-    "Second question?",
-    "Third question?",
-    "Fourth question?"
+        "First question?",
+        "Second question?",
+        "Third question?",
+        "Fourth question?"
     ]
 
     RFQ Content:
     {text}
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-2024-08-06",
-        messages=[{"role": "system", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0
-    )
-
-
-    logging.info("Prompt: %s", response)
     try:
-        data = json.loads(response.choices[0].message.content)
-        suggestions = data.get("questions", [])
-        if isinstance(suggestions, list) and len(suggestions) == 4:
-            return suggestions
-        else:
-            logging.warning(f"Prompt suggestions not a list: {response}")
+        response = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",
+            messages=[{"role": "system", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+
+        logging.info("Prompt: %s", response)
+
+        content = response.choices[0].message.content
+
+        try:
+            data = json.loads(content)
+
+            # Try all known keys or fallback to list parsing
+            for key in ["prompts", "questions", "suggestions"]:
+                if key in data and isinstance(data[key], list):
+                    return data[key]
+
+            # If content is a list itself
+            if isinstance(data, list):
+                return data
+
+            # Fallback: Try to parse the value of the only key as list
+            if isinstance(data, dict) and len(data) == 1:
+                only_val = next(iter(data.values()))
+                if isinstance(only_val, list):
+                    return only_val
+
+            logging.warning("Prompt suggestions not a list or recognizable: %s", content)
             return []
-    except json.JSONDecodeError:
-        logging.error(f"Failed to parse prompt suggestions: {response}")
+        except json.JSONDecodeError:
+            logging.error("Failed to parse response content as JSON: %s", content)
+            return []
+
+    except Exception as e:
+        logging.exception("Error during prompt suggestion generation")
         return []
+
 
 
 
@@ -382,7 +448,7 @@ def get_winning_proposals(db_user: str, db_name: str, db_password: str):
 
 
 async def extract_proposal_metadata_llm(proposal_text: str) -> dict:
-    from langchain_openai import OpenAI
+    from langchain_openai import OpenAI # type: ignore
     llm = OpenAI(temperature = 0, openai_api_key=app_settings.openai_api_key)
     
     prompt = f"""

@@ -636,7 +636,6 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
         graph = create_state_graph(
             State,
             intent_router_agent,
-            query_understanding_agent,
             structure_node,
             retrieve_examples,
             generate_draft,         
@@ -644,7 +643,6 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
             human_node,
             control_edge,
             google_search_agent,
-            interrupt_for_clarification,
             route_message,
             call_model,
             store_memory,
@@ -696,76 +694,51 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
                     break
 
                 case "__interrupt__":
-                    if isinstance(value, tuple) and isinstance(value[0], Interrupt):
-                        msg = value[0].value or ""
-                        logging.info("Generated Response: %s", msg)
+                    interrupt_reached = True
 
-                        # 🔥 FIXED: Properly infer source from value[0].ns
-                        interrupt_ns = value[0].ns or []
-                        logging.info("Interrupt_ns: %s", interrupt_ns)
-                        # interrupt_type = "clarification" if any("clarification" in ns for ns in interrupt_ns) else "proposal_review"
-
-                        interrupt_type = (
-                            "clarification"
-                            if any("interrupt_for_clarification" in ns for ns in interrupt_ns)
-                            else "proposal_review"
+                    proposal_content = last_response
+                    
+                    if not proposal_content:
+                        return JSONResponse(
+                            content={"error": "No proposal content generated"},
+                            status_code=500
                         )
-                        initial_state["interrupt_type"] = interrupt_type
 
-                        payload = {
-                            "interrupt": True,
-                            "type": interrupt_type,
-                            "message": msg,
-                            "state": {**initial_state, "status": initial_state["status"].value}
-                        }
-
-                        if interrupt_type == "proposal_review":
-                            proposal_content = last_response
-                            if not proposal_content:
-                                return JSONResponse(
-                                    {"error": "No proposal content"},
-                                    status_code=500
-                                )
-                            payload.update({
-                                "proposal": proposal_content,
-                                "feedback_options": [
-                                    "approve - if the proposal is satisfactory",
-                                    "revise - if changes are needed (please specify what to improve)"
-                                ]
-                            })
-
-                        logging.info("→ payload to frontend: %s", payload)
-                        return JSONResponse(content=payload, status_code=200)
-
-
-
-
-        # ✅ Final fallback: valid completion without interrupt
-        if not interrupt_reached and last_response:
-            return JSONResponse(
-                content={
-                    "interrupt": False,
-                    "response": last_response,
-                    "state": {
+                    # Safely convert Enum to string
+                    serializable_state = {
                         **initial_state,
                         "status": initial_state["status"].value
                     }
-                },
+
+                    response_payload = {
+                        "interrupt": True,
+                        "message": "Please review the draft and provide your feedback.",
+                        "proposal": proposal_content,
+                        "feedback_options": [
+                            "approve - if the proposal is satisfactory",
+                            "revise - if changes are needed (please specify what to improve)"
+                        ],
+                        "state": serializable_state
+                    }
+
+                    # Log response
+                    logging.info("Returning response: %s", response_payload)
+
+                    return JSONResponse(content=response_payload, status_code=200)
+                
+        # If an interrupt was not reached but we have a last_response (e.g., direct/LLM answer)
+        if last_response and not interrupt_reached:
+            return JSONResponse(
+                content={"response": last_response},
                 status_code=200
             )
 
-        # ❌ No response at all
-        return JSONResponse(
-            content={"error": "Graph completed but no response was generated"},
-            status_code=500
-        )
-
-    # except Exception as e:
-    #     logging.error("Error in retrieve_query: %s", str(e))
-    #     return JSONResponse(
-    #         content={"error": f"An error occurred: {str(e)}"},
-    #         status_code=500
-    #     )
+        # If no interrupt reached and no response, return error
+        if not interrupt_reached:
+            return JSONResponse(
+                content={"error": "Graph completed without reaching interrupt"},
+                status_code=500
+            )
 
     except Exception as compile_error:
         logging.error("Graph compile failed: %s", compile_error, exc_info=True)
@@ -804,7 +777,6 @@ async def resume_graph(payload: dict):
         graph = create_state_graph(
             State,
             intent_router_agent,
-            query_understanding_agent,
             structure_node,
             retrieve_examples,      
             generate_draft,         
@@ -812,7 +784,6 @@ async def resume_graph(payload: dict):
             human_node,
             control_edge,
             google_search_agent,
-            interrupt_for_clarification,
             route_message,
             call_model,
             store_memory,

@@ -40,8 +40,9 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
   const effectiveRfqId = rfqId ?? rfqIdFromUrl
   
 
-  const initialMode = (searchParams.get("mode") as "local" | "hybrid") || "local"
-  const [mode, setChatMode] = useState<"local" | "hybrid">(chatMode as "local" | "hybrid" || initialMode)
+  const paramMode = searchParams.get("mode");
+  const normalizedMode = (paramMode === "hybrid" ? "hybrid" : "local") as "local" | "hybrid";
+  const [mode, setChatMode] = useState<"local" | "hybrid">(normalizedMode);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
@@ -49,7 +50,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }, [mode, router, pathname, searchParams])
 
-  const queryUrl = `https://api.zenovo.ai/api/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
+  const queryUrl = `http://localhost:8000/api/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
   console.log("💡 Effective RFQ ID:", effectiveRfqId);
 
   const {
@@ -229,7 +230,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
         </div>
       )}
 
-      {/* {interrupted ? (
+      {interrupted ? (
         <div className="feedback-prompt">
           <p>Please provide feedback:</p>
           <form onSubmit={handleSubmit}>
@@ -237,58 +238,24 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
               className="question-box"
               onChange={handleInputChange}
               value={input}
-              placeholder="Please enter your feedback or type 'Approve' to approve proposal..."
+              placeholder="Type your feedback or select a suggestion..."
               disabled={isLoading}
             />
-            <button type="submit" disabled={isLoading}>Changes needed</button>
-            <TypeaheadPrompts
-              input={input}
-              suggestions={FEEDBACK_OPTIONS}
-              onSelect={(selected) => {
-                append({ id: crypto.randomUUID(), content: selected, role: "user" })
-                setInput("")
-              }}
-            />
-          </form>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit}>
-          <input
-            className="question-box"
-            onChange={handleInputChange}
-            value={input}
-            placeholder="Ask me something..."
-          />
-          <input type="submit" value="Send" />
-          <TypeaheadPrompts
-            input={input}
-            suggestions={COMMON_PROMPTS}
-            onSelect={(selected) => {
-              append({ id: crypto.randomUUID(), content: selected, role: "user" })
-              setInput("")
-            }}
-          />
-        </form>
-      )} */}
+            <button type="submit" disabled={isLoading}>
+              Send Feedback
+            </button>
 
-      {interrupted && feedbackOptions.length > 0 ? (
-        <div className="feedback-prompt">
-          <p>Please provide feedback:</p>
-          <form onSubmit={handleSubmit}>
-            <input
-              className="question-box"
-              onChange={handleInputChange}
-              value={input}
-              placeholder="Please enter your feedback or type 'Approve' to approve proposal..."
-              disabled={isLoading}
-            />
-            <button type="submit" disabled={isLoading}>Changes needed</button>
             <TypeaheadPrompts
               input={input}
               suggestions={FEEDBACK_OPTIONS}
               onSelect={(selected) => {
-                append({ id: crypto.randomUUID(), content: selected, role: "user" })
-                setInput("")
+                const msg: Message = {
+                  id: crypto.randomUUID(),
+                  content: selected,
+                  role: "user",
+                }
+                append(msg)
+                setInput("") // Important!
               }}
             />
           </form>
@@ -306,7 +273,12 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
             input={input}
             suggestions={COMMON_PROMPTS}
             onSelect={(selected) => {
-              append({ id: crypto.randomUUID(), content: selected, role: "user" })
+              const msg: Message = {
+                id: crypto.randomUUID(),
+                content: selected,
+                role: "user",
+              }
+              append(msg)
               setInput("")
             }}
           />

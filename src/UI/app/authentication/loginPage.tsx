@@ -30,7 +30,7 @@ export default function LoginPage({ notice }: LoginPageProps) {
       <h1>Welcome to CDGA Proposal Agent</h1>
       <p className="status-message">{STATUS_MESSAGES[statusIndex]}</p>
       <a
-        href="https://api.zenovo.ai/api/login"
+        href="http://localhost:8000/api/login"
         className="btn btn-primary"
         aria-label="Login with Google"
       >
