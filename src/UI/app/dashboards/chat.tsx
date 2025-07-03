@@ -61,8 +61,7 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
     setInput,
     handleInputChange,
     handleSubmit,
-    interrupted,
-    feedbackOptions, 
+    interrupted, 
     error,
     setError,
   } = useCustomChat(queryUrl, effectiveRfqId, mode)
