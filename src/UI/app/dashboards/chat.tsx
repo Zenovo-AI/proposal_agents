@@ -27,7 +27,7 @@ export type ChatPanelProps = {
 };
 
 
-const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelProps) => {
+const ChatPanel = ({ onBack, rfqId, showChatModeSelector }: ChatPanelProps) => {
   const [uploading, setUploading] = useState(false)
   const [isWinningChecked, setIsWinningChecked] = useState(false)
   const [docLink, setDocLink] = useState<string | null>(null)
