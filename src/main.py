@@ -33,7 +33,7 @@ from reflexion_agent.critic import critic
 from reflexion_agent.retriever import retrieve_examples
 from reflexion_agent.state import State, Status
 from datamodel import PromptRequest, QueryRequest, RequestModel
-from rag_agent.inference import generate_draft
+from rag_agent.inference import factual_generate_draft, proposal_generate_draft
 from rag_agent.ingress import ingress_file_doc
 from database.db_helper import extract_prompt_suggestions, extract_proposal_metadata_llm, get_recent_activity, insert_document, open_tenant_db_connection, save_metadata_to_db, extract_metadata_with_llm, store_proposal_to_db
 from models.models import metadata
@@ -45,7 +45,7 @@ from models.users_utilities import get_user_session, lookup_user_db_credentials
 # from agent_memory.background_mem import background_memory_saver
 from agent_memory.memory_storage import call_model, route_message, sanitize_user_id, store_memory #call_model, store_memory
 from agent_memory.langMem import google_search_agent
-from intent_router.intent_router import intent_router_agent, interrupt_for_clarification, route_for_rag_clarification
+from intent_router.intent_router import intent_router_agent, interrupt_for_clarification, response_type_router_agent, route_for_rag_clarification
 from agent_memory.background_mem import background_memory_saver
 from structure_agent.query_agent import query_understanding_agent
 from utils import sql_expert_prompt
@@ -189,7 +189,7 @@ llm = ChatOpenAI(
 )
 
 # Wrap the critic function to always pass in the LLM
-wrapped_critic = partial(critic, llm=llm)
+wrapped_critic = partial(critic)
 
    
 @app.exception_handler(RequestValidationError)
@@ -227,6 +227,7 @@ async def auth(request: Request):
         "grant_type": "authorization_code",
     }
 
+    # timeout = httpx.Timeout(connect=20.0, read=30.0)
     async with httpx.AsyncClient() as client:
         response = await client.post(app_settings.google_token_endpoint, data=data)
         token_data = response.json()
@@ -355,6 +356,7 @@ async def upload_files_and_links(
 
         results = []
 
+
         # Handle multiple file uploads
         for file in files:
             file_path = os.path.join(working_dir, file.filename)
@@ -396,7 +398,7 @@ async def upload_files_and_links(
                 continue
 
             filename = f"web_{uuid.uuid4().hex[:8]}.pdf"
-            file_path = os.path.join(working_dir, file.filename)
+            file_path = os.path.join(working_dir, filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(response.content)
@@ -636,9 +638,11 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
         graph = create_state_graph(
             State,
             intent_router_agent,
+            response_type_router_agent,
+            proposal_generate_draft,
+            factual_generate_draft,
             structure_node,
             retrieve_examples,
-            generate_draft,         
             critic,
             human_node,
             control_edge,
@@ -671,7 +675,14 @@ async def retrieve_query(requestModel: RequestModel, session_data: dict = Depend
             print(f"Current node: {node_id}")  # Debug print
 
             match node_id:
-                case "draft":
+                case "proposal_draft":
+                    ai_message = value.get("candidate", {})
+                    content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+                    last_response = content_str
+                    initial_state["candidate"] = content_str
+                    continue
+
+                case "factual_draft":
                     ai_message = value.get("candidate", {})
                     content_str = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
                     last_response = content_str
@@ -777,9 +788,11 @@ async def resume_graph(payload: dict):
         graph = create_state_graph(
             State,
             intent_router_agent,
+            response_type_router_agent,
+            proposal_generate_draft,
+            factual_generate_draft,
             structure_node,
-            retrieve_examples,      
-            generate_draft,         
+            retrieve_examples,
             critic,
             human_node,
             control_edge,
@@ -808,7 +821,14 @@ async def resume_graph(payload: dict):
             #     ai_message = value.get("candidate", {})
             #     proposal_content = ai_message.content if hasattr(proposal_content, "content") else str(proposal_content)
 
-            if node_id == "draft":
+            if node_id == "proposal_draft":
+                ai_message = value.get("candidate")
+                if ai_message and hasattr(ai_message, "content"):
+                    proposal_content = ai_message.content
+                elif isinstance(ai_message, str):
+                    proposal_content = ai_message
+
+            if node_id == "factual_draft":
                 ai_message = value.get("candidate")
                 if ai_message and hasattr(ai_message, "content"):
                     proposal_content = ai_message.content
@@ -962,6 +982,7 @@ async def save_to_google_drive(payload: dict, session_data: dict = Depends(get_u
             raise HTTPException(status_code=404, detail="No approval message found in the conversation.")
         
         # Search backwards from the approval message for the immediately preceding assistant message
+        proposal_text = ""  # Ensure proposal_text is always defined
         for prev_index in range(last_approval_index - 1, -1, -1):
             prev_message = messages[prev_index]
             if prev_message.get("role") == "assistant":
@@ -1124,6 +1145,8 @@ async def get_prompt_suggestions(
 @app.get("/api/recent-activity")
 def recent_activity(session_data: dict= Depends(get_user_session)):
     email = session_data.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
     activity = get_recent_activity(db_user, db_name, db_password)
 
@@ -1133,6 +1156,8 @@ def recent_activity(session_data: dict= Depends(get_user_session)):
 @app.get("/api/winning-proposals")
 def winning_proposals(session_data: dict = Depends(get_user_session)):
     email = session_data.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
     db_user, db_name, db_password, _ = lookup_user_db_credentials(email)
 
     conn = open_tenant_db_connection(db_user, db_name, db_password)
@@ -1169,6 +1194,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=int(app_settings.port),
+        port=int(app_settings.port) if app_settings.port is not None else 8000,
         timeout_keep_alive=timeout_keep_alive,
     )

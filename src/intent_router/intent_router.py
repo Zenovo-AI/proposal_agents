@@ -17,52 +17,6 @@ from langchain_core.prompts import ChatPromptTemplate # type: ignore
 
 llm = ChatOpenAI(model="gpt-4.1", openai_api_key=app_settings.openai_api_key, temperature=0)
 
-# async def intent_router_agent(state: State) -> str:
-#     query = state.get("query", "")
-
-#     system_prompt = """
-#     You are CDGA-AI intent router, a polite AI receptionist.The system is comprised two workflow which are google search and query understanding agent. 
-#     Your decision is highly important as it will impact the efficiency of this application. Think and understand the {query} very well before making a decision. 
-#     Categorize the user's intent.
-#     This decision is **critical for system efficiency and accuracy**. Carefully review the user's query and choose **only one** of the two routes: **direct** or **rag**.
-
-#     WORKFLOWS:
-#     - **direct** → Use for casual chit‑chat, greetings, general knowledge (weather, current events), or questions about yourself. No document retrieval.
-#     - **rag** → Use for anything involving RFQs, CTBTO, proposals, or requiring detail from uploaded documents or organizational records. Must trigger document retrieval and RAG workflow.
-
-#     RULES:
-#     1. If user says casual greeting (e.g., “hi”, “hello”, “good morning”), or asks about your identity/role, or general knowledge, return **direct**.
-#     2. If user asks about RFQ, proposal, CTBTO, CDGA’s experience, technical steps, warranties, drilling procedures, context from files, or organizational records, return **rag**.
-    # 3. Always map queries involving:
-    # - keywords: **RFQ**, **proposal**, **CTBTO**, **CDGA experience**, **document**, **uploaded file**, **technical steps**, **warranty**, **steps in Lot**, etc.
-    # - deeper facts inside documents (e.g. “What are the steps proposed…”, “Summarize CDGA’s approach to…”, “Write a proposal against…”)
-    # → to **rag**.
-
-#     EXAMPLES:
-#     - “Hi there!” → direct
-#     - “What’s the weather in Lagos today?” → direct
-#     - “Who are you?” → direct
-#     - “What experience does CDGA have working with CTBTO?” → rag
-#     - “What are the steps in Lot 1 of the RFQ?” → rag
-#     - “Can you write a proposal based on the CTBTO RFQ?” → rag
-#     - “Summarize CDGA’s warranty terms in their last proposal.” → rag
-#     - “Tell me about Nigeria’s capital” → direct
-
-#     **Respond with exactly one word:** `direct` **or** `rag` — **no additional text**.
-#     """
-
-
-
-#     response = llm.invoke([
-#         SystemMessage(content=system_prompt),
-#         HumanMessage(content=query)
-#     ]).content.strip().lower()
-    
-#     state["intent_route"] = response
-#     logging.info("route: %s", response)
-
-#     return state
-
 
 async def intent_router_agent(state: State) -> State:
     query = state.get("user_query", "").strip()
@@ -126,13 +80,91 @@ async def intent_router_agent(state: State) -> State:
         logging.error(f"Routing failed: {e}")
         decision = "direct"
 
-    # ✅ Validate and assign
+    #  Validate and assign
     if decision not in {"direct", "rag"}:
         decision = "direct"
 
     state["intent_route"] = decision
     logging.info("🚦 Routing decision: %s", decision)
     return state
+
+
+async def response_type_router_agent(state: State) -> State:
+    logging.info("Running response_type_router_agent with state")
+    query = state.get("user_query", "").strip()
+    if not query:
+        state["response_type"] = "simple_answer"
+        return state
+
+    # System prompt for classification
+    system_prompt = f"""
+    You are CDGA-AI, a smart classification agent that routes a user query to either:
+    
+    1. `simple_answer`: for direct, short factual answers based on documents or common knowledge.
+    2. `full_proposal`: for requests that involve writing structured responses such as proposals, drafts, or multi-step technical narratives.
+
+    🔍 INSTRUCTIONS:
+    Carefully analyze the user's query and determine the best response type.
+
+    - If the query asks for:
+        - a brief factual answer
+        - quick technical clarification
+        - summaries
+        - definitions
+      → classify as `simple_answer`
+
+    - If the query asks for:
+        - writing a proposal
+        - preparing a draft
+        - outlining a technical or organizational approach
+        - generating responses to RFQs or CTBTO documents
+      → classify as `full_proposal`
+
+    ⚠️ RULES:
+    - Always choose `full_proposal` if the query mentions "write a proposal", "draft", "prepare response", or is clearly seeking a formal or structured deliverable.
+    - Do not choose `simple_answer` if the response would be reviewed by humans or sent to external partners.
+    
+    🔎 EXAMPLES:
+    - "What is CDGA's role in the CTBTO RFQ?" → simple_answer
+    - "Can you draft a proposal for the uploaded RFQ?" → full_proposal
+    - "Summarize CDGA's past experience on borehole drilling." → simple_answer
+    - "Write a full proposal for the CTBTO site inspection." → full_proposal
+
+    Now analyze the following user query:
+
+    **"{query}"**
+
+    Respond with only one word: `simple_answer` or `full_proposal`
+    """
+
+    # Replace this with your actual LLM call
+    response_type = await llm.ainvoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=query)
+    ])
+    response_type = response_type.content.strip().lower()
+
+    if response_type not in {"simple_answer", "full_proposal"}:
+        response_type = "simple_answer"
+
+    state["response_type"] = response_type
+    logging.info("🚦 Response type decision: %s", response_type)
+    return state
+
+
+def route_response_type(state: State) -> str:
+    """
+    Route based on the response type determined by the response_type_router_agent.
+    """
+    response_type = state.get("response_type", "").lower().strip()
+    
+    if response_type == "full_proposal":
+        return "proposal_generate_draft"
+    elif response_type == "simple_answer":
+        return "factual_generate_draft"
+    
+    logging.warning(f"Unrecognized response type: {response_type}, defaulting to factual_generate_draft")
+    return "factual_generate_draft"
 
 
 def route_intent(state: State) -> str:
@@ -236,4 +268,6 @@ def detect_intent(user_query) -> str:
 
 
 
-
+def critic_route(state: dict) -> str:
+    # If loop count is less than 2, go back to draft
+    return "draft" if state.get("critic_loops", 0) < 2 else "human_interrupt"

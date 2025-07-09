@@ -205,11 +205,10 @@ def sanitize_email(email: str) -> str:
 
 
 def format_response(response):
-    """
-    Split response text into readable sentences and format for display.
-    """
+    """Format the chatbot response for better readability."""
     sentences = re.split(r'(?<=[.!?])\s+', response)
-    return '\n'.join(sentences)
+    formatted_response = '\n'.join(sentences)
+    return formatted_response
 
 def format_response(response):
     """Format the chatbot response for better readability."""
@@ -230,69 +229,64 @@ def parse_response_for_doc_ids(response):
 
 
 
-# def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
-#     """Expands the user query using the structure and merges it into a single, explicit query."""
+# def generate_explicit_query(query: str, structure) -> str:
 #     llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
 
-#     # 🛠️ Parse structure if it's an AIMessage
-#     if isinstance(structure, AIMessage):
-#         try:
-#             structure = ast.literal_eval(structure.content)
-#         except Exception as e:
-#             print("[generate_explicit_query] Failed to parse structure.content:", structure.content)
-#             raise ValueError("Invalid format for structure.content") from e
+#     # Clean up structure input
+#     if hasattr(structure, "content"):
+#         structure = ast.literal_eval(structure.content)
+#     elif not isinstance(structure, dict):
+#         raise ValueError("structure must be dict or AIMessage with dict content")
 
-#     structure_type = structure["type"]
-#     sections = structure.get("sections", [])
-#     subsections = structure.get("subsections", [])
-#     lots = structure.get("lot_titles", [])
-#     attachments_required = structure.get("attachments", False)
+#     # Extract
+#     Type = structure["type"]
+#     sections = structure["sections"]
+#     subsections = structure["subsections"]
+#     lots = structure["lot_titles"]
+#     attachments_required = structure["attachments"]
 
-#     # Format structure parts
-#     section_list = "\n".join([f"- {s}" for s in sections]) if sections else "N/A"
-#     subsection_list = "\n".join([f"- {s}" for s in subsections]) if subsections else "N/A"
-#     lot_list = "\n".join([f"- {l}" for l in lots]) if lots else "None"
+#     # Build lists
+#     sections_md = "\n".join(f"- {s}" for s in sections)
+#     subsections_md = "\n".join(f"- {s}" for s in subsections)
+#     lots_md = "\n".join(f"- {l}" for l in lots) or "None"
 
 #     prompt = f"""
-#     You are a proposal planning assistant. Your goal is to transform the vague user query into an **explicit, detailed set of instructions** for writing a technical proposal.
-    
-#     <context>
-#     Understand the user **intent** before breaking down the queries.
-#     - If the query is factual (e.g., "Who are CDGA’s primary international clients?" or "Can you write an Executive summary for what is requested on the RFQ?"),
-#     break it down accordingly for a structured factual response.
-#     - If the query is about generating a proposal (e.g., "Can you generate a proposal for a power infrastructure project in East Africa?"),
-#     break it down strictly using the following structure: {proposal_structure_json}
-#     </context>
+#     You are a proposal planning assistant. Expand the user’s query into a detailed, structured prompt for writing a full proposal.
 
-#     Original user query:  
-#     "{query}"
+#     1️⃣ First, generate **50 explicit sub‑questions** that cover all relevant aspects of:
+#     • The RFQ’s scope and objectives
+#     • Section structure (see below)
+#     • Key procurement and contractual details
+#     • LOT-by-LOT breakdown
+#     • Compliance, QA, team, budget, attachments, etc.
 
-#     Identified Structure:
-#     - Type: {structure_type}
-#     - Sections:\n{section_list}
-#     - Subsections:\n{subsection_list}
-#     - LOT Titles:\n{lot_list}
-#     - Attachments Required: {"Yes" if attachments_required else "No"}
+#     2️⃣ Then synthesize them into a single comprehensive **Final Explicit Query** that a proposal-writing LLM can act on directly.
 
-#     Your job is to:
-#     1. Break the query down into 20 detailed subqueries that reflect the above structure.
-#     2. Connect each subsection to it's particular section
-#     3. c
-#     4. Finish with a "**Final Explicit Query**" combining all subqueries into one single request prompt that a proposal LLM can respond to.
+#     ---
 
+#     Type: {Type}
+#     Sections:
+#     {sections_md}
+#     Subsections:
+#     {subsections_md}
+#     LOT Titles:
+#     {lots_md}
+#     Attachments required: {"Yes" if attachments_required else "No"}
 
-#     Format:
-#     **Expanded Queries:**
-#     1. ...
-#     2. ...
+#     User Query:
+#     \"\"\"{query}\"\"\"
+
+#     ## Expanded Sub‑Questions:
+#     1.
+#     2.
 #     ...
-#     8. ...
+#     20.
 
-#     **Final Explicit Query:**
-#     "... <single, comprehensive prompt here> ..."
+#     ## Final Explicit Query:
+#     \"\"\" 
 #     """
-#     response = llm.invoke(prompt)
-#     return response.strip()
+#     resp = llm.invoke(prompt)
+#     return resp.strip()
 
 
 def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
@@ -300,32 +294,33 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
     llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
 
     # 🛠️ Parse structure if it's an AIMessage
-    if isinstance(structure, AIMessage):
+    if hasattr(structure, "content"):
         try:
             structure = ast.literal_eval(structure.content)
         except Exception as e:
-            print("[generate_explicit_query] Failed to parse structure.content:", structure.content)
+            print("[generate_explicit_query] Failed to parse structure.content:", getattr(structure, "content", str(structure)))
             raise ValueError("Invalid format for structure.content") from e
+    # If structure is already a ProposalStructure (dict), use as-is
 
     structure_type = structure.get("type", "proposal")
     sections = structure.get("sections", [])
     subsections = structure.get("subsections", [])
-    lots = structure.get("lot_titles", [])
+    Phases = structure.get("Phases", [])
     attachments_required = structure.get("attachments", False)
 
     # Format structure parts
     section_list = "\n".join([f"- {s}" for s in sections]) if sections else "N/A"
     subsection_list = "\n".join([f"- {s}" for s in subsections]) if subsections else "N/A"
-    lot_list = "\n".join([f"- {l}" for l in lots]) if lots else "None"
+    Phase_list = "\n".join([f"- {l}" for l in Phases]) if Phases else "None"
 
     prompt = f"""
     You are a proposal planning assistant.
 
-    Your task is to transform the vague or general user query into a **structured, detailed, and explicit prompt** to guide a proposal-writing language model. The final output must include 20 expanded sub-queries and then synthesize them into a single all-inclusive prompt called the **Final Explicit Query**.
+    Your task is to transform the vague or general user query into a **structured, detailed, and explicit prompt** to guide a proposal-writing language model. 
+    The final output must include **100 expanded sub-queries and then synthesize them into a single all-inclusive prompt called the **Final Explicit Query**.
 
     <context>
-    Understand the user's **intent** (e.g., proposal generation, executive summary, or factual analysis).
-    If the intent is to generate a proposal, expand it using the structure below. Otherwise, adapt it accordingly for a structured factual output.
+    Expand it using the structure below. Otherwise, adapt it accordingly for a structured factual output.
 
     Use the provided structure dynamically:
 
@@ -335,7 +330,7 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
     - Subsections:
     {subsection_list}
     - LOT Titles:
-    {lot_list}
+    {Phase_list}
     - Attachments Required: {"Yes" if attachments_required else "No"}
 
     Also use these guiding principles:
@@ -348,7 +343,102 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
     7. Identify required attachments and forms (e.g. Bidder’s Statement, Compliance Matrix).
     8. Highlight evaluation criteria and relevant contractual terms.
     9. Include key personnel on the project and their CVs
-    9. Format everything in a structured query-to-prompt style.
+    10. Format everything in a structured query-to-prompt style.
+    11. Identify CVs relevant in the query being asked.
+    12. For the “Submitted by” section:
+    - Clearly state the name(s) of the submitting organization(s) and indicate if it is a joint proposal or consortium.
+    - Include address, contact person, email, and signature-ready legal identifiers.
+    - Reference the submission date and any procurement-specific tags or identifiers.
+    13. For the “Introduction” section:
+    - State the RFQ title, reference number, and the issuing authority (e.g., CTBTO).
+    - Mention the overall objective of the assignment and express interest and readiness to participate.
+    - Include key submission details like deadline, method (email/upload), and required file formats.
+    14. For the “Understanding of the Assignment” section:
+    - Describe the scope of work in the RFQ, including phases, locations, and technologies (e.g., PV system).
+    - Show your interpretation of CTBTO’s expectations, challenges, and goals.
+    - Highlight how the scope aligns with UN EMG guidelines and environmental compliance (e.g., Annex M).
+    15. For the “Company Profile and Competencies” section:
+    - Present the organization’s legal and operational capacity to execute the assignment.
+    - Include summaries of prior projects that show domain expertise in solar design and installation supervision.
+    - Demonstrate specialized knowledge in E&S safeguards, post-installation audit, and remote logistics.
+    16. For the “Technical Approach” section:
+    - Divide the approach by phases:
+        - Phase 1: Explain how feasibility studies and environmental screenings will be conducted.
+        - Phase 2: Describe how system components will be specified and designed for reliability and compliance.
+        - Phase 3: Clarify your support in procurement, technical validation, and vendor selection.
+        - Phase 4: Describe how site supervision, milestone validation, and quality checks will be implemented.
+        - Phase 5: Explain final system testing, commissioning, and O&M training.
+        - Use bullet points and structured formatting for each phase and LOT.
+    17. For the “Project Management and Reporting” section:
+    - Provide a clear project timeline with milestones aligned to payment triggers and CTBTO reporting needs.
+    - Describe tools, platforms, or reporting formats to be used for coordination.
+    - Include roles responsible for weekly reports, escalation, and deliverables review.
+    18. For the “Commercial” section:
+    - Provide detailed breakdown of costs by activity, LOT, and team member where applicable.
+    - Include assumptions about taxes, duties, foreign exchange risks, and insurance.
+    - Outline payment terms and invoicing procedures that match CTBTO’s expected format.
+    19. For the “Team Composition” section:
+    - List names, titles, and brief bios of key personnel, linking each one to specific tasks or phases.
+    - Indicate whether they are full-time, part-time, or consultants.
+    - Mention supporting local partners (e.g., Fiafi Solar), and their respective contributions.
+    20. For the “Quality Assurance and Risk Management” section:
+    - Describe QA processes for each technical deliverable and installation phase.
+    - Identify at least 3 key risks (e.g., delays, compliance issues, staffing shortages) and mitigation steps.
+    - Highlight your organization’s risk protocols and contingency planning.
+    21. For the “Warranty and After-Sales Support” section:
+    - State how long your warranty covers labor, parts, and system performance.
+    - Describe your plan for ongoing support, remote monitoring, and issue resolution.
+    - Indicate if local personnel will be trained to handle minor faults post-handover.
+    22. For the “Conclusion” section:
+    - Restate your technical strengths and organizational readiness.
+    - Emphasize commitment to CTBTO standards, timelines, and quality outcomes.
+    - Mention your openness to clarification meetings, kickoff planning, and contract finalization.
+    23. For the “Attachments” section:
+    - List all mandatory attachments such as:
+        - Bidder’s Statement
+        - Compliance Matrix
+        - CVs of key staff
+        - Legal documents (registration, tax clearance)
+        - BOQ (Bill of Quantities)
+    Ensure all attachments are referenced within the proposal body and submitted as separate files if required.
+
+    </context>
+
+    Original user query:
+    "{query}"
+
+    ---
+
+    Expanded Queries:
+    1. …
+    2. …
+    … up to 100.
+
+    Final Explicit Query:
+    "…"
+    """
+    try:
+        response = llm.invoke(prompt)
+    except Exception as e:
+        print("[generate_explicit_query] Exception during LLM call:", str(e))
+        return ""
+    return response.strip()
+
+
+def query_expansion(query: str) -> str:
+    """Expands the user query using the structure and merges it into a single, explicit query."""
+    llm = OpenAI(temperature=0, openai_api_key=app_settings.openai_api_key)
+
+
+    prompt = f"""
+    You are a proposal planning assistant.
+
+    Your task is to expand {query} into different queries in such a way that all the relevant information needed to answer the query are retrieved. 
+    The final output must include 20 expanded sub-queries and then synthesize them into a single all-inclusive prompt called the **Final Explicit Query**.
+    <context>
+
+    Also use these guiding principles:
+    - Format everything in a structured query-to-prompt style.
 
     </context>
 
@@ -366,12 +456,8 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
     "…"
     """
 
-    
-    # print("[generate_explicit_query] Prompt sent to LLM:\n", prompt)
-
     try:
         response = llm.invoke(prompt)
-        # print("[generate_explicit_query] Raw LLM response:\n", repr(response))
     except Exception as e:
         print("[generate_explicit_query] Exception during LLM call:", str(e))
         return ""
@@ -379,61 +465,87 @@ def generate_explicit_query(query: str, structure: ProposalStructure) -> str:
 
 
 
-def proposal_prompt(user_query: str, retrieved_docs: list[Document]) -> str:
-    query_intent = detect_intent(user_query)
+# def proposal_prompt(user_query: str, retrieved_docs: list[Document]) -> str:
 
-    doc_section = f"""
-    Use retrieved documents {retrieved_docs} as style examples (mirroring their phrasing and technical depth), and cite sources inline like “[Doc A]”.
-    Only write a proposal using the format on the retrieved documents when the user's intent is 'full_proposal'.
-    Do not include or reference the retrieved documents when the user's intent is 'simple_answer'.
-    """ if query_intent == "full_proposal" else ""
+    # doc_section = f"""
+    # Use retrieved documents {retrieved_docs} as style examples (mirroring their phrasing and technical depth), and cite sources inline like “[Doc A]”.
+    # Only write a proposal using the format on the retrieved documents..
+    # """
 
+    # return f"""
+    # User Query:
+    # {user_query}
+
+    # You are CDGA‑AI, an expert proposal writer for the Centre for Development of Green Alternatives (CDGA), an Irish technical consultancy established in 1998 with global experience in engineering design, consultancy, and training.
+
+    # Alwyas generate a structured proposal using the style and structure of the provided retrieved documents.
+
+    # # CO‑STAR Instructions
+
+    # Context:
+    # You have access to retrieved documents detailing a client RFQ and CDGA’s capabilities.
+
+    # Objective:
+    # Generate a full technical proposal in response to the user's request.
+
+    # Style:
+    # Professional, well‑structured, with clear headings and bullet points.
+
+    # Tone:
+    # Confident, respectful, and client‑focused.
+
+    # Audience:
+    # Technical evaluation team at an international organization (e.g., CTBTO).
+
+    # {doc_section}
+
+    # # Additional Instructions
+
+    # You are tasked with preparing formal proposals, bids, and technical responses for international engineering and development projects.
+
+    # <context>
+    # When writing a proposal strictly follow these guidelines:
+    # - Use the information available to you, especially the retrieved documents.
+    # - Do not include the RFQ No (CTBTO RFQ No. 2024-0108).
+    # - Write on behalf of CDGA with specific, context-rich, and professional responses.
+    # - Avoid generic language. Be precise, relevant, and cite sources like “[Doc A]”.
+    # - Always end proposals with a conclusion.
+    # - Always include credible CVs as part of the proposal.
+    # - Avoid generic language. Be precise, relevant, and cite sources like “[Doc A]”.
+
+    # What does it mean to “write on behalf of CDGA”?
+
+    # **Example (bad):**
+    # "We can help with this project by applying general engineering principles."
+
+    # **Example (good):**
+    # "CDGA will leverage its established expertise in sustainable civil infrastructure to design and implement resilient water systems, 
+    # building on its prior success delivering projects across Sub-Saharan Africa in collaboration with UNDP and the African Union."
+
+    # </context>
+
+    # ---Response Rules---
+    # - NO PREAMBLE
+    # - Format the response in a clear and readable manner.
+    # - When writing s proposal:
+    #     - Structure the document using clear headings and bullet points (Clearly and professionally formatted).
+    #     - Cite the document sources when using specific facts or data.
+    #     - Use this format exactly:
+    #         Section Title
+
+    #         [Then begin the paragraph content...]
+    #     - Do NOT write section title and content on the same line.
+    #     - Do NOT prefix section titles with symbols.
+    #     - Include bullet points or numbered lists when helpful.
+    #     - Use domain-relevant and technically accurate language.
+    #     - Include credible CVs.
+
+    # Write clearly and professionally, as if the response will be reviewed by a technical evaluation committee.
+    # """
+
+def proposal_prompt(user_query: str, structure: dict, retrieved_docs: list[Document]) -> str:
     return f"""
-    User Query:
-    {user_query}
-
-    You are CDGA‑AI, an expert proposal writer who can also answer factual questions for the Centre for Development of Green Alternatives (CDGA), an Irish technical consultancy established in 1998 with global experience in engineering design, consultancy, and training.
-
-    The user's intent is: **{query_intent}**
-
-    If the intent is 'simple_answer', respond clearly using the knowledge retrieved from the knowledge base and make sure your response is related to the {user_query}.  
-    If the intent is 'full_proposal', generate a structured proposal using the style and structure of the provided retrieved documents.
-
-    # CO‑STAR Instructions
-
-    Context:
-    You have access to retrieved documents detailing a client RFQ and CDGA’s capabilities.
-
-    Objective:
-    Generate a full technical proposal in response to the user's request — but only if the query intent is 'full_proposal'.
-
-    Style:
-    Professional, well‑structured, with clear headings and bullet points.
-
-    Tone:
-    Confident, respectful, and client‑focused.
-
-    Audience:
-    Technical evaluation team at an international organization (e.g., CTBTO).
-
-    {doc_section}
-
-    # Additional Instructions
-
-    You are tasked with preparing formal proposals, bids, and technical responses for international engineering and development projects.
-
-    <context>
-    When a user asks a question, take your time to understand the intent before writing a response.
-    Do not generate a proposal when the intent of the user is 'simple_answer'.
-    In that case, provide only a clear and accurate answer to the question.
-
-    If the intent is 'full_proposal', then:
-    - Use the information available to you, especially the retrieved documents.
-    - Do not include the RFQ No (CTBTO RFQ No. 2024-0108).
-    - Write on behalf of CDGA with specific, context-rich, and professional responses.
-    - Avoid generic language. Be precise, relevant, and cite sources like “[Doc A]”.
-    - Always end proposals with a conclusion.
-    - Always include credible CVs as part of the proposal.
+    You are CDGA-AI, a proposal-writing agent.
 
     What does it mean to “write on behalf of CDGA”?
 
@@ -444,28 +556,64 @@ def proposal_prompt(user_query: str, retrieved_docs: list[Document]) -> str:
     "CDGA will leverage its established expertise in sustainable civil infrastructure to design and implement resilient water systems, 
     building on its prior success delivering projects across Sub-Saharan Africa in collaboration with UNDP and the African Union."
 
+    You are to generate a full technical proposal in response to the user query:  
+    "{user_query}"
+
+    Use the following structure exactly.  
+    Each section and subsection must be followed even if the context doesn’t fully support it—create placeholders in those cases.  
+    Format the result professionally using headings, numbered lists, and clear, concise technical language.
+
+    <proposal_structure>
+    {json.dumps(structure, indent=2)}
+    </proposal_structure>
+
+    <context>
+    {retrieved_docs}
     </context>
 
-    Your task is to generate a response based on:
-    - The user’s query
-    - The intent type: **{query_intent}**
-    - (If proposal) The retrieved documents and structure provided
+    Generate a full draft proposal now:
+    """
+
+def factual_prompt(user_query: str) -> str:
+    return f"""
+    User Query:
+    {user_query}
+
+    You are CDGA‑AI, an expert in aswering factual questions for the Centre for Development of Green Alternatives (CDGA), an Irish technical consultancy established in 1998 with global experience in engineering design, consultancy, and training.
+
+    Always respond clearly using the knowledge retrieved from the knowledge base and make sure your response is related to the {user_query}.  
+    
+    <context>
+    You must always provide only a clear and accurate answer to the question.
+
+    - Write on behalf of CDGA with specific, context-rich, and professional responses.
+    - Respond using only retrieved knowledge—no added preamble or fluff.
+    - Provide section headings directly followed by their content, with **no blank lines** in between.
+    - Use tight spacing: **one line per heading and its first sentence**, then normal paragraph flow.
+    - Avoid generic language. Be precise, relevant, and cite sources like “[Doc A]”.
+
+    Example of correct spacing:
+
+    Installation Requirements  
+    The generator must fit...
+
+    Example of bad spacing:
+
+    Installation Requirements
+
+    The generator must fit…
+
+    </context
 
     ---Response Rules---
     - NO PREAMBLE
-    - If intent is 'simple_answer': provide only the factual response with no proposal structure.
-    - If intent is 'full_proposal':
-        - Structure the document using clear headings and bullet points.
-        - Cite the document sources when using specific facts or data.
-        - Use this format exactly:
-            Section Title
+    - Always provide only the factual response.
+    - **No blank lines** between headings and their following content.
+    - Use minimal spacing—titles and content must be tightly combined.
+    - **No preamble**—start directly with the answer.
+    - Format the response in a clear and readable manner.
+    - Tone: clear, professional, technical.
 
-            [Then begin the paragraph content...]
-        - Do NOT write section title and content on the same line.
-        - Do NOT prefix section titles with symbols.
-        - Include bullet points or numbered lists when helpful.
-        - Use domain-relevant and technically accurate language.
-        - Include credible CVs.
 
     Write clearly and professionally, as if the response will be reviewed by a technical evaluation committee.
     """

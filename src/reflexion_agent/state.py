@@ -45,6 +45,7 @@ class State(TypedDict):
     structure_message: AIMessage
     session_data: dict
     needs_clarification: bool
+    response_type: str
     intent_route: str
     should_save_memory: bool
     interrupt_type: Optional[Literal["clarification", "proposal_review"]]

@@ -78,3 +78,12 @@ def critic(state: dict, config: dict) -> dict:
     state.setdefault("messages", []).append(AIMessage(content=new_content))
     return state
 
+
+def critic_with_counter(state: dict, config: dict) -> dict:
+    # Run original critic logic
+    new_state = critic(state, config)
+
+    # Increment loop counter
+    loops = new_state.get("critic_loops", 0) + 1
+    new_state["critic_loops"] = loops
+    return new_state

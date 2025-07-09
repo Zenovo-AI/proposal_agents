@@ -40,15 +40,21 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
   const effectiveRfqId = rfqId ?? rfqIdFromUrl
   
 
-  const paramMode = searchParams.get("mode");
-  const normalizedMode = (paramMode === "hybrid" ? "hybrid" : "local") as "local" | "hybrid";
-  const [mode, setChatMode] = useState<"local" | "hybrid">(normalizedMode);
+  const paramMode = searchParams.get("mode")
+  const initialMode = (paramMode === "hybrid" ? "hybrid" : "local") as "local" | "hybrid"
+  const [mode, setMode] = useState<"local" | "hybrid">(initialMode)
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("mode", mode)
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }, [mode, router, pathname, searchParams])
+
+  // useEffect(() => {
+  //   const params = new URLSearchParams(searchParams.toString())
+  //   params.set("mode", mode)
+  //   router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  // }, [mode, router, pathname, searchParams])
 
   const queryUrl = `https://api.zenovo.ai/api/retrieve?rfq=${encodeURIComponent(effectiveRfqId)}&mode=${mode}`
   console.log("💡 Effective RFQ ID:", effectiveRfqId);
@@ -90,23 +96,24 @@ const ChatPanel = ({ onBack, rfqId, chatMode, showChatModeSelector }: ChatPanelP
       {showChatModeSelector && (
         <div className="chat-mode-selector">
           <p>Select chat mode:</p>
-          <div className="chat-mode-button-container">
-            <button
-              onClick={() => setChatMode("local")}
-              className={`chat-mode-button ${chatMode === "local" ? "selected" : ""}`}
-            >
-              Local
-            </button>
-            <button
-              onClick={() => setChatMode("hybrid")}
-              className={`chat-mode-button ${chatMode === "hybrid" ? "selected" : ""}`}
-            >
-              Hybrid
-            </button>
-          </div>
-          {noMessages && !showChatModeSelector && (
-              <PromptSuggestionsRow onPromptClick={handlePrompt} rfqId={effectiveRfqId} />
-            )}
+          <label>
+            <input
+              type="checkbox"
+              name="chatModeLocal"
+              checked={mode === "local"}
+              onChange={() => setMode("local")}
+            />
+            Local
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              name="chatModeHybrid"
+              checked={mode === "hybrid"}
+              onChange={() => setMode("hybrid")}
+            />
+            Hybrid
+          </label>
         </div>
       )}
 
